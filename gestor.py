@@ -22,7 +22,7 @@ class GestorApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Lembra lembra dos clientes – feito por Vinicius")
-        self.root.geometry("900x500")
+        self.root.geometry("950x520")
 
         self.dados = carregar()
         self.cliente_atual = None
@@ -48,35 +48,54 @@ class GestorApp:
         self.var_pesquisa.trace_add("write", lambda *_: self.atualizar_lista())
         ttk.Entry(self.left, textvariable=self.var_pesquisa).pack(fill=tk.X, pady=5)
 
-        # Lista clientes
+        # Lista de clientes
         ttk.Label(self.left, text="Clientes", font=("Segoe UI", 10, "bold")).pack(anchor="w")
-        self.lista = tk.Listbox(self.left, width=30)
+        self.lista = tk.Listbox(self.left, width=32)
         self.lista.pack(fill=tk.Y, expand=True)
         self.lista.bind("<<ListboxSelect>>", self.selecionar_cliente)
 
-        ttk.Button(self.left, text="Novo Cliente", command=self.novo_cliente).pack(fill=tk.X, pady=5)
+        ttk.Button(self.left, text="Novo Cliente", command=self.novo_cliente).pack(fill=tk.X, pady=4)
+        ttk.Button(self.left, text="Editar Cliente", command=self.editar_cliente).pack(fill=tk.X, pady=4)
+        ttk.Button(self.left, text="Remover Cliente", command=self.remover_cliente).pack(fill=tk.X, pady=4)
 
         # Checklist
-        self.lbl_cliente = ttk.Label(self.right, text="Selecione um cliente",
-                                     font=("Segoe UI", 11, "bold"))
+        self.lbl_cliente = ttk.Label(
+            self.right,
+            text="Selecione um cliente",
+            font=("Segoe UI", 11, "bold")
+        )
         self.lbl_cliente.pack(anchor="w")
 
         self.frame_checks = ttk.Frame(self.right)
         self.frame_checks.pack(fill=tk.BOTH, expand=True, pady=10)
 
-        # Botões
+        # Botões checklist
         btns = ttk.Frame(self.right)
         btns.pack(fill=tk.X)
 
         ttk.Button(btns, text="Adicionar Item", command=self.adicionar_item).pack(side=tk.LEFT)
-        ttk.Button(btns, text="Remover Item Selecionado",
-                   command=self.remover_item_selecionado).pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(
+            btns,
+            text="Remover Item Selecionado",
+            command=self.remover_item_selecionado
+        ).pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(
+            btns,
+            text="Limpar Marcações",
+            command=self.limpar_marcacoes
+        ).pack(side=tk.LEFT, padx=5)
+
         ttk.Button(btns, text="Salvar", command=self.salvar_checklist).pack(side=tk.RIGHT)
 
+    # ---------- CLIENTES ----------
     def atualizar_lista(self):
         termo = self.var_pesquisa.get().lower()
+        clientes_ordenados = sorted(self.dados.keys(), key=str.lower)
+
         self.lista.delete(0, tk.END)
-        for cliente in self.dados:
+        for cliente in clientes_ordenados:
             if termo in cliente.lower():
                 self.lista.insert(tk.END, cliente)
 
@@ -91,6 +110,48 @@ class GestorApp:
         salvar(self.dados)
         self.atualizar_lista()
 
+    def editar_cliente(self):
+        if not self.cliente_atual:
+            messagebox.showwarning("Aviso", "Selecione um cliente.")
+            return
+
+        novo_nome = simpledialog.askstring(
+            "Editar Cliente",
+            "Novo nome do cliente:",
+            initialvalue=self.cliente_atual
+        )
+
+        if not novo_nome or novo_nome == self.cliente_atual:
+            return
+
+        if novo_nome in self.dados:
+            messagebox.showerror("Erro", "Já existe um cliente com esse nome.")
+            return
+
+        self.dados[novo_nome] = self.dados.pop(self.cliente_atual)
+        self.cliente_atual = novo_nome
+        salvar(self.dados)
+        self.atualizar_lista()
+        self.lbl_cliente.config(text=f"Checklist – {novo_nome}")
+
+    def remover_cliente(self):
+        if not self.cliente_atual:
+            messagebox.showwarning("Aviso", "Selecione um cliente.")
+            return
+
+        if messagebox.askyesno(
+            "Confirmar",
+            f"Remover o cliente '{self.cliente_atual}' e todo o checklist?"
+        ):
+            del self.dados[self.cliente_atual]
+            self.cliente_atual = None
+            salvar(self.dados)
+            self.atualizar_lista()
+            self.lbl_cliente.config(text="Selecione um cliente")
+            for w in self.frame_checks.winfo_children():
+                w.destroy()
+
+    # ---------- CHECKLIST ----------
     def selecionar_cliente(self, _):
         if not self.lista.curselection():
             return
@@ -123,20 +184,32 @@ class GestorApp:
         if not self.cliente_atual:
             return
 
-        selecionados = [
-            item for item, var in self.check_vars.items() if var.get()
-        ]
-
+        selecionados = [i for i, v in self.check_vars.items() if v.get()]
         if not selecionados:
             messagebox.showwarning("Aviso", "Marque o item que deseja remover.")
             return
 
         item = selecionados[0]
-
         if messagebox.askyesno("Confirmar", f"Remover '{item}'?"):
             del self.dados[self.cliente_atual][item]
             salvar(self.dados)
             self.mostrar_checklist()
+
+    def limpar_marcacoes(self):
+        if not self.cliente_atual or not self.check_vars:
+            return
+
+        if not messagebox.askyesno(
+            "Confirmar",
+            "Deseja limpar todas as marcações deste checklist?"
+        ):
+            return
+
+        for item in self.dados[self.cliente_atual]:
+            self.dados[self.cliente_atual][item] = False
+
+        salvar(self.dados)
+        self.mostrar_checklist()
 
     def salvar_checklist(self):
         if not self.cliente_atual:
@@ -151,3 +224,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     GestorApp(root)
     root.mainloop()
+
