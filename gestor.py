@@ -21,7 +21,7 @@ def salvar(dados):
 class GestorApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Gestor de Clientes e Ensaios – Vinicius Coelho")
+        self.root.title("Lembra lembra dos clientes – feito por Vinicius")
         self.root.geometry("900x500")
 
         self.dados = carregar()
