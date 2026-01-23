@@ -13,10 +13,6 @@ def data_str_para_date(s):
     return datetime.strptime(s, "%d/%m/%y").date()
 
 
-def date_para_str(d):
-    return d.strftime("%d/%m/%y")
-
-
 # =================== DADOS ===================
 def carregar():
     if not os.path.exists(ARQUIVO):
@@ -24,6 +20,7 @@ def carregar():
     with open(ARQUIVO, "r", encoding="utf-8") as f:
         dados = json.load(f)
 
+    # compatibilidade com versões antigas
     for cliente, itens in dados.items():
         for nome, valor in list(itens.items()):
             if isinstance(valor, bool):
@@ -42,7 +39,7 @@ class GestorApp:
         self.root = root
         self.root.title("Me lembra se não eu esqueço – Vinicius")
         self.root.geometry("1400x650")
-        self.root.configure(bg="#2b2b2b")
+        self.root.configure(bg="white")
 
         self.dados = carregar()
         self.cliente_atual = None
@@ -58,16 +55,24 @@ class GestorApp:
         style = ttk.Style()
         style.theme_use("clam")
 
-        style.configure(".", background="#2b2b2b", foreground="white")
-        style.configure("TLabel", background="#2b2b2b", foreground="white")
-        style.configure("Header.TLabel", font=("Segoe UI", 12, "bold"))
+        azul = "#1f6aa5"
+
+        style.configure(".", background="white", foreground="black")
+        style.configure("TLabel", background="white")
+        style.configure("Header.TLabel",
+                        font=("Segoe UI", 12, "bold"),
+                        foreground=azul)
+
         style.configure("TButton", padding=6)
+        style.map("TButton",
+                  background=[("active", "#e6f0fa")])
+
         style.configure("Treeview",
-                        background="#1e1e1e",
-                        foreground="white",
-                        fieldbackground="#1e1e1e")
+                        background="white",
+                        fieldbackground="white",
+                        rowheight=24)
         style.map("Treeview",
-                  background=[("selected", "#007acc")])
+                  background=[("selected", "#cce0f5")])
 
     # =================== UI ===================
     def build_ui(self):
@@ -82,8 +87,14 @@ class GestorApp:
 
         # ---------- CLIENTES ----------
         ttk.Label(self.left, text="Clientes", style="Header.TLabel").pack(anchor="w")
-        self.lista = tk.Listbox(self.left, width=30, bg="#1e1e1e",
-                                fg="white", selectbackground="#007acc")
+
+        self.lista = tk.Listbox(
+            self.left, width=30,
+            bg="white", fg="black",
+            selectbackground="#cce0f5",
+            highlightthickness=1,
+            highlightcolor="#1f6aa5"
+        )
         self.lista.pack(fill=tk.Y, expand=True)
         self.lista.bind("<<ListboxSelect>>", self.selecionar_cliente)
 
@@ -97,10 +108,13 @@ class GestorApp:
         self.lbl_cliente.pack(anchor="w")
 
         self.frame_checks = ttk.Frame(self.middle)
-        self.frame_checks.pack(fill=tk.BOTH, expand=True)
+        self.frame_checks.pack(fill=tk.BOTH, expand=True, pady=4)
 
-        ttk.Button(self.middle, text="Adicionar Item", command=self.adicionar_item).pack(side=tk.LEFT)
-        ttk.Button(self.middle, text="Salvar", command=self.salvar_checklist).pack(side=tk.RIGHT)
+        botoes = ttk.Frame(self.middle)
+        botoes.pack(fill=tk.X)
+
+        ttk.Button(botoes, text="Adicionar Item", command=self.adicionar_item).pack(side=tk.LEFT)
+        ttk.Button(botoes, text="Salvar", command=self.salvar_checklist).pack(side=tk.RIGHT)
 
         # ---------- TABELA 3 ----------
         ttk.Label(self.right, text="Tarefas por Data", style="Header.TLabel").pack(anchor="w")
@@ -123,6 +137,7 @@ class GestorApp:
         for c in ("cliente", "item", "data"):
             self.tree.heading(c, text=c.capitalize())
             self.tree.column(c, anchor="w")
+
         self.tree.pack(fill=tk.BOTH, expand=True)
 
         self.frame_cal = ttk.Frame(self.right)
@@ -178,8 +193,7 @@ class GestorApp:
             linha.pack(fill=tk.X, pady=2)
 
             var = tk.BooleanVar(value=dados["feito"])
-            chk = ttk.Checkbutton(linha, variable=var)
-            chk.pack(side=tk.LEFT)
+            ttk.Checkbutton(linha, variable=var).pack(side=tk.LEFT)
 
             ttk.Label(linha, text=item, width=50, anchor="w").pack(side=tk.LEFT)
             ttk.Label(linha, text=dados["data"] or "—", width=10).pack(side=tk.LEFT)
@@ -190,9 +204,10 @@ class GestorApp:
             self.check_vars[item] = var
 
     def adicionar_item(self):
-        nome = self.janela_texto("Novo Item", "")
+        nome = self.janela_texto("Nova Tarefa", "")
         if not nome:
             return
+
         data = self.janela_texto("Data (dd/mm/aa)", "")
         if data:
             try:
@@ -210,9 +225,12 @@ class GestorApp:
 
     def editar_item(self, item):
         dados = self.dados[self.cliente_atual][item]
-        novo_nome = self.janela_texto("Editar Item", item)
-        nova_data = self.janela_texto("Editar Data (dd/mm/aa)", dados["data"] or "")
 
+        novo_nome = self.janela_texto("Editar Tarefa", item)
+        if not novo_nome:
+            return
+
+        nova_data = self.janela_texto("Editar Data (dd/mm/aa)", dados["data"] or "")
         if nova_data:
             data_str_para_date(nova_data)
         else:
@@ -223,6 +241,7 @@ class GestorApp:
             "feito": dados["feito"],
             "data": nova_data
         }
+
         salvar(self.dados)
         self.mostrar_checklist()
         self.atualizar_tarefas()
@@ -246,8 +265,8 @@ class GestorApp:
             for nome, dados in itens.items():
                 if dados["feito"] or not dados["data"]:
                     continue
-                d = data_str_para_date(dados["data"])
 
+                d = data_str_para_date(dados["data"])
                 status = "Futuras"
                 if d < hoje:
                     status = "Atrasadas"
@@ -268,7 +287,8 @@ class GestorApp:
         cal = calendar.Calendar(calendar.SUNDAY)
         hoje = date.today()
 
-        ttk.Label(self.frame_cal, text=hoje.strftime("%B %Y"),
+        ttk.Label(self.frame_cal,
+                  text=hoje.strftime("%B %Y"),
                   style="Header.TLabel").pack()
 
         grid = ttk.Frame(self.frame_cal)
@@ -280,28 +300,37 @@ class GestorApp:
 
         for r, semana in enumerate(cal.monthdayscalendar(hoje.year, hoje.month), start=1):
             for c, dia in enumerate(semana):
-                texto = str(dia) if dia else ""
-                ttk.Label(grid, text=texto).grid(row=r, column=c, padx=4)
+                ttk.Label(grid, text=str(dia) if dia else "").grid(row=r, column=c, padx=4)
 
     # =================== JANELA TEXTO ===================
     def janela_texto(self, titulo, valor):
         top = tk.Toplevel(self.root)
         top.title(titulo)
-        top.geometry("500x250")
+        top.geometry("480x220")
+        top.resizable(False, False)
+        top.grab_set()
 
-        txt = tk.Text(top, wrap="word")
+        frame = ttk.Frame(top, padding=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        txt = tk.Text(frame, wrap="word", height=6)
         txt.pack(fill=tk.BOTH, expand=True)
         txt.insert("1.0", valor)
 
-        retorno = []
+        resultado = []
 
-        def salvar_texto():
-            retorno.append(txt.get("1.0", "end").strip())
+        def confirmar():
+            resultado.append(txt.get("1.0", "end").strip())
             top.destroy()
 
-        ttk.Button(top, text="OK", command=salvar_texto).pack(pady=4)
+        botoes = ttk.Frame(frame)
+        botoes.pack(pady=6)
+
+        ttk.Button(botoes, text="OK", command=confirmar).pack(side=tk.RIGHT)
+        ttk.Button(botoes, text="Cancelar", command=top.destroy).pack(side=tk.RIGHT, padx=6)
+
         self.root.wait_window(top)
-        return retorno[0] if retorno else None
+        return resultado[0] if resultado else None
 
     # =================== OUTROS ===================
     def importar_json(self):
@@ -312,6 +341,7 @@ class GestorApp:
             self.dados = json.load(f)
         salvar(self.dados)
         self.atualizar_lista()
+
 
 # =================== MAIN ===================
 if __name__ == "__main__":
