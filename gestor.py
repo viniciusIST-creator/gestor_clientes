@@ -55,11 +55,11 @@ class GestorApp:
         style = ttk.Style()
         style.theme_use("clam")
 
-        azul = "#1f6aa5"
+        style.configure("Header.TLabel",
+                        font=("Segoe UI", 12, "bold"),
+                        foreground="#1f6aa5")
 
-        style.configure(".", background="white", foreground="black")
-        style.configure("Header.TLabel", font=("Segoe UI", 12, "bold"), foreground=azul)
-        style.configure("Treeview", rowheight=24)
+        style.configure("Treeview", rowheight=26)
         style.map("Treeview", background=[("selected", "#cce0f5")])
 
     # =================== UI ===================
@@ -76,10 +76,7 @@ class GestorApp:
         # ---------- CLIENTES ----------
         ttk.Label(self.left, text="Clientes", style="Header.TLabel").pack(anchor="w")
 
-        self.lista = tk.Listbox(
-            self.left, width=30,
-            selectbackground="#cce0f5"
-        )
+        self.lista = tk.Listbox(self.left, width=30, selectbackground="#cce0f5")
         self.lista.pack(fill=tk.Y, expand=True)
         self.lista.bind("<<ListboxSelect>>", self.selecionar_cliente)
 
@@ -88,7 +85,7 @@ class GestorApp:
         ttk.Button(self.left, text="Remover Cliente", command=self.remover_cliente).pack(fill=tk.X, pady=2)
         ttk.Button(self.left, text="Importar JSON", command=self.importar_json).pack(fill=tk.X, pady=6)
 
-        # ---------- TABELA 2 ----------
+        # ---------- CHECKLIST ----------
         self.lbl_cliente = ttk.Label(self.middle, text="Checklist", style="Header.TLabel")
         self.lbl_cliente.pack(anchor="w")
 
@@ -96,13 +93,15 @@ class GestorApp:
         self.frame_checks.pack(fill=tk.BOTH, expand=True)
 
         botoes = ttk.Frame(self.middle)
-        botoes.pack(fill=tk.X)
+        botoes.pack(fill=tk.X, pady=6)
 
         ttk.Button(botoes, text="Adicionar Item", command=self.adicionar_item).pack(side=tk.LEFT)
-        ttk.Button(botoes, text="Editar Tarefa", command=self.editar_item).pack(side=tk.LEFT, padx=6)
+        ttk.Button(botoes, text="Editar Tarefa", command=self.editar_item).pack(side=tk.LEFT, padx=4)
+        ttk.Button(botoes, text="Apagar Item", command=self.apagar_item).pack(side=tk.LEFT, padx=4)
+        ttk.Button(botoes, text="Limpar Checklist", command=self.limpar_checklist).pack(side=tk.LEFT, padx=4)
         ttk.Button(botoes, text="Salvar", command=self.salvar_checklist).pack(side=tk.RIGHT)
 
-        # ---------- TABELA 3 ----------
+        # ---------- TAREFAS POR DATA ----------
         ttk.Label(self.right, text="Tarefas por Data", style="Header.TLabel").pack(anchor="w")
 
         self.combo_filtro = ttk.Combobox(
@@ -120,13 +119,14 @@ class GestorApp:
             show="headings",
             height=12
         )
+
         for c in ("cliente", "item", "data"):
             self.tree.heading(c, text=c.capitalize())
             self.tree.column(c, anchor="w")
 
-        self.tree.tag_configure("atrasada", foreground="red")
-        self.tree.tag_configure("hoje", foreground="orange")
-        self.tree.tag_configure("futura", foreground="green")
+        self.tree.tag_configure("atrasada", background="#ffd6d6")
+        self.tree.tag_configure("hoje", background="#fff3cd")
+        self.tree.tag_configure("futura", background="#d4edda")
 
         self.tree.pack(fill=tk.BOTH, expand=True)
 
@@ -192,6 +192,7 @@ class GestorApp:
             lbl.bind("<Button-1>", lambda e, i=item: self.selecionar_item(i))
 
             ttk.Label(linha, text=dados["data"] or "—", width=10).pack(side=tk.LEFT)
+
             self.check_vars[item] = var
 
     def selecionar_item(self, item):
@@ -204,10 +205,7 @@ class GestorApp:
         if not res:
             return
 
-        self.dados[self.cliente_atual][res["texto"]] = {
-            "feito": False,
-            "data": res["data"]
-        }
+        self.dados[self.cliente_atual][res["texto"]] = {"feito": False, "data": res["data"]}
         salvar(self.dados)
         self.mostrar_checklist()
         self.atualizar_tarefas()
@@ -218,24 +216,39 @@ class GestorApp:
             return
 
         dados = self.dados[self.cliente_atual][self.item_selecionado]
-        res = self.janela_tarefa(
-            "Editar Tarefa",
-            self.item_selecionado,
-            dados["data"] or ""
-        )
+        res = self.janela_tarefa("Editar Tarefa", self.item_selecionado, dados["data"] or "")
         if not res:
             return
 
         self.dados[self.cliente_atual].pop(self.item_selecionado)
-        self.dados[self.cliente_atual][res["texto"]] = {
-            "feito": dados["feito"],
-            "data": res["data"]
-        }
-
+        self.dados[self.cliente_atual][res["texto"]] = {"feito": dados["feito"], "data": res["data"]}
         self.item_selecionado = None
+
         salvar(self.dados)
         self.mostrar_checklist()
         self.atualizar_tarefas()
+
+    def apagar_item(self):
+        if not self.item_selecionado:
+            messagebox.showwarning("Aviso", "Selecione uma tarefa")
+            return
+
+        if messagebox.askyesno("Confirmar", "Apagar esta tarefa?"):
+            self.dados[self.cliente_atual].pop(self.item_selecionado)
+            self.item_selecionado = None
+            salvar(self.dados)
+            self.mostrar_checklist()
+            self.atualizar_tarefas()
+
+    def limpar_checklist(self):
+        if not self.cliente_atual:
+            return
+
+        if messagebox.askyesno("Confirmar", "Remover TODAS as tarefas deste cliente?"):
+            self.dados[self.cliente_atual] = {}
+            salvar(self.dados)
+            self.mostrar_checklist()
+            self.atualizar_tarefas()
 
     def salvar_checklist(self):
         for item, var in self.check_vars.items():
@@ -258,8 +271,6 @@ class GestorApp:
                     continue
 
                 d = data_str_para_date(dados["data"])
-                tag = "futura"
-                status = "Futuras"
 
                 if d < hoje:
                     tag = "atrasada"
@@ -267,6 +278,9 @@ class GestorApp:
                 elif d == hoje:
                     tag = "hoje"
                     status = "Hoje"
+                else:
+                    tag = "futura"
+                    status = "Futuras"
 
                 if self.filtro_atual != "Todas" and status != self.filtro_atual:
                     continue
@@ -281,16 +295,12 @@ class GestorApp:
             w.destroy()
 
         hoje = date.today()
-        meses = [
-            "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-            "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
-        ]
+        meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                 "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 
-        ttk.Label(
-            self.frame_cal,
-            text=f"{meses[hoje.month - 1]} {hoje.year}",
-            style="Header.TLabel"
-        ).pack()
+        ttk.Label(self.frame_cal,
+                  text=f"{meses[hoje.month - 1]} {hoje.year}",
+                  style="Header.TLabel").pack()
 
         cal = calendar.Calendar(calendar.SUNDAY)
         grid = ttk.Frame(self.frame_cal)
@@ -328,8 +338,8 @@ class GestorApp:
                 top.destroy()
 
         top.bind("<Return>", confirmar)
-
         ttk.Button(frame, text="OK", command=confirmar).pack(pady=8)
+
         self.root.wait_window(top)
         return resultado.get("valor")
 
