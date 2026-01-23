@@ -1,10 +1,20 @@
 import json
 import os
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog, filedialog
+from tkinter import ttk, messagebox, filedialog
 from datetime import datetime, date
+import calendar
 
 ARQUIVO = "dados.json"
+
+
+# =================== UTIL ===================
+def data_str_para_date(s):
+    return datetime.strptime(s, "%d/%m/%y").date()
+
+
+def date_para_str(d):
+    return d.strftime("%d/%m/%y")
 
 
 # =================== DADOS ===================
@@ -14,7 +24,6 @@ def carregar():
     with open(ARQUIVO, "r", encoding="utf-8") as f:
         dados = json.load(f)
 
-    # MIGRAÇÃO AUTOMÁTICA (bool -> dict)
     for cliente, itens in dados.items():
         for nome, valor in list(itens.items()):
             if isinstance(valor, bool):
@@ -27,21 +36,18 @@ def salvar(dados):
         json.dump(dados, f, indent=4, ensure_ascii=False)
 
 
-def str_para_data(s):
-    return datetime.strptime(s, "%d/%m/%Y").date()
-
-
 # =================== APP ===================
 class GestorApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Me lembra se não eu esqueço – Vinicius")
-        self.root.geometry("1200x560")
-        self.root.protocol("WM_DELETE_WINDOW", self.ao_fechar)
+        self.root.geometry("1400x650")
+        self.root.configure(bg="#2b2b2b")
 
         self.dados = carregar()
         self.cliente_atual = None
         self.check_vars = {}
+        self.filtro_atual = "Todas"
 
         self.configurar_estilo()
         self.build_ui()
@@ -51,7 +57,17 @@ class GestorApp:
     def configurar_estilo(self):
         style = ttk.Style()
         style.theme_use("clam")
+
+        style.configure(".", background="#2b2b2b", foreground="white")
+        style.configure("TLabel", background="#2b2b2b", foreground="white")
         style.configure("Header.TLabel", font=("Segoe UI", 12, "bold"))
+        style.configure("TButton", padding=6)
+        style.configure("Treeview",
+                        background="#1e1e1e",
+                        foreground="white",
+                        fieldbackground="#1e1e1e")
+        style.map("Treeview",
+                  background=[("selected", "#007acc")])
 
     # =================== UI ===================
     def build_ui(self):
@@ -64,50 +80,54 @@ class GestorApp:
         self.right = ttk.Frame(self.root, padding=10)
         self.right.pack(side=tk.RIGHT, fill=tk.BOTH)
 
-        # -------- CLIENTES --------
+        # ---------- CLIENTES ----------
         ttk.Label(self.left, text="Clientes", style="Header.TLabel").pack(anchor="w")
-        self.lista = tk.Listbox(self.left, width=30)
+        self.lista = tk.Listbox(self.left, width=30, bg="#1e1e1e",
+                                fg="white", selectbackground="#007acc")
         self.lista.pack(fill=tk.Y, expand=True)
         self.lista.bind("<<ListboxSelect>>", self.selecionar_cliente)
 
-        ttk.Button(self.left, text="Novo Cliente",
-                   command=self.novo_cliente).pack(fill=tk.X, pady=2)
-        ttk.Button(self.left, text="Editar Cliente",
-                   command=self.editar_cliente).pack(fill=tk.X, pady=2)
-        ttk.Button(self.left, text="Remover Cliente",
-                   command=self.remover_cliente).pack(fill=tk.X, pady=2)
-        ttk.Button(self.left, text="Importar JSON",
-                   command=self.importar_json).pack(fill=tk.X, pady=6)
+        ttk.Button(self.left, text="Novo Cliente", command=self.novo_cliente).pack(fill=tk.X, pady=2)
+        ttk.Button(self.left, text="Editar Cliente", command=self.editar_cliente).pack(fill=tk.X, pady=2)
+        ttk.Button(self.left, text="Remover Cliente", command=self.remover_cliente).pack(fill=tk.X, pady=2)
+        ttk.Button(self.left, text="Importar JSON", command=self.importar_json).pack(fill=tk.X, pady=6)
 
-        # -------- ITENS --------
-        self.lbl_cliente = ttk.Label(self.middle, text="Checklist",
-                                     style="Header.TLabel")
+        # ---------- TABELA 2 ----------
+        self.lbl_cliente = ttk.Label(self.middle, text="Checklist", style="Header.TLabel")
         self.lbl_cliente.pack(anchor="w")
 
         self.frame_checks = ttk.Frame(self.middle)
         self.frame_checks.pack(fill=tk.BOTH, expand=True)
 
-        ttk.Button(self.middle, text="Adicionar Item",
-                   command=self.adicionar_item).pack(side=tk.LEFT)
-        ttk.Button(self.middle, text="Remover Item Marcado",
-                   command=self.remover_item_selecionado).pack(side=tk.LEFT, padx=5)
-        ttk.Button(self.middle, text="Salvar",
-                   command=self.salvar_checklist).pack(side=tk.RIGHT)
+        ttk.Button(self.middle, text="Adicionar Item", command=self.adicionar_item).pack(side=tk.LEFT)
+        ttk.Button(self.middle, text="Salvar", command=self.salvar_checklist).pack(side=tk.RIGHT)
 
-        # -------- TAREFAS POR DATA --------
-        ttk.Label(self.right, text="Tarefas por Data",
-                  style="Header.TLabel").pack(anchor="w")
+        # ---------- TABELA 3 ----------
+        ttk.Label(self.right, text="Tarefas por Data", style="Header.TLabel").pack(anchor="w")
+
+        self.combo_filtro = ttk.Combobox(
+            self.right,
+            values=["Todas", "Atrasadas", "Hoje", "Futuras"],
+            state="readonly"
+        )
+        self.combo_filtro.set("Todas")
+        self.combo_filtro.pack(fill=tk.X, pady=4)
+        self.combo_filtro.bind("<<ComboboxSelected>>", self.aplicar_filtro)
 
         self.tree = ttk.Treeview(
             self.right,
             columns=("cliente", "item", "data"),
             show="headings",
-            height=20
+            height=12
         )
-        self.tree.heading("cliente", text="Cliente")
-        self.tree.heading("item", text="Item")
-        self.tree.heading("data", text="Data")
+        for c in ("cliente", "item", "data"):
+            self.tree.heading(c, text=c.capitalize())
+            self.tree.column(c, anchor="w")
         self.tree.pack(fill=tk.BOTH, expand=True)
+
+        self.frame_cal = ttk.Frame(self.right)
+        self.frame_cal.pack(fill=tk.X, pady=6)
+        self.mostrar_calendario()
 
     # =================== CLIENTES ===================
     def atualizar_lista(self):
@@ -116,8 +136,8 @@ class GestorApp:
             self.lista.insert(tk.END, c)
 
     def novo_cliente(self):
-        nome = simpledialog.askstring("Novo Cliente", "Nome:")
-        if nome and nome not in self.dados:
+        nome = self.janela_texto("Novo Cliente", "")
+        if nome:
             self.dados[nome] = {}
             salvar(self.dados)
             self.atualizar_lista()
@@ -125,8 +145,7 @@ class GestorApp:
     def editar_cliente(self):
         if not self.cliente_atual:
             return
-        novo = simpledialog.askstring("Editar", "Novo nome:",
-                                      initialvalue=self.cliente_atual)
+        novo = self.janela_texto("Editar Cliente", self.cliente_atual)
         if novo:
             self.dados[novo] = self.dados.pop(self.cliente_atual)
             self.cliente_atual = novo
@@ -139,9 +158,6 @@ class GestorApp:
             self.cliente_atual = None
             salvar(self.dados)
             self.atualizar_lista()
-            self.frame_checks.destroy()
-            self.frame_checks = ttk.Frame(self.middle)
-            self.frame_checks.pack(fill=tk.BOTH, expand=True)
 
     # =================== CHECKLIST ===================
     def selecionar_cliente(self, _):
@@ -158,46 +174,55 @@ class GestorApp:
         self.check_vars.clear()
 
         for item, dados in self.dados[self.cliente_atual].items():
+            linha = ttk.Frame(self.frame_checks)
+            linha.pack(fill=tk.X, pady=2)
+
             var = tk.BooleanVar(value=dados["feito"])
-            texto = f"{item}  |  {dados['data'] or '—'}"
-            ttk.Checkbutton(self.frame_checks,
-                            text=texto,
-                            variable=var).pack(anchor="w")
+            chk = ttk.Checkbutton(linha, variable=var)
+            chk.pack(side=tk.LEFT)
+
+            ttk.Label(linha, text=item, width=50, anchor="w").pack(side=tk.LEFT)
+            ttk.Label(linha, text=dados["data"] or "—", width=10).pack(side=tk.LEFT)
+
+            ttk.Button(linha, text="Editar",
+                       command=lambda i=item: self.editar_item(i)).pack(side=tk.LEFT)
+
             self.check_vars[item] = var
 
     def adicionar_item(self):
-        if not self.cliente_atual:
-            return
-        nome = simpledialog.askstring("Item", "Descrição:")
+        nome = self.janela_texto("Novo Item", "")
         if not nome:
             return
-
-        data = simpledialog.askstring(
-            "Data",
-            "Data (dd/mm/aaaa) ou vazio:"
-        )
+        data = self.janela_texto("Data (dd/mm/aa)", "")
         if data:
             try:
-                str_para_data(data)
+                data_str_para_date(data)
             except:
                 messagebox.showerror("Erro", "Data inválida")
                 return
         else:
             data = None
 
-        self.dados[self.cliente_atual][nome] = {
-            "feito": False,
-            "data": data
-        }
+        self.dados[self.cliente_atual][nome] = {"feito": False, "data": data}
         salvar(self.dados)
         self.mostrar_checklist()
         self.atualizar_tarefas()
 
-    def remover_item_selecionado(self):
-        for item, var in self.check_vars.items():
-            if var.get():
-                del self.dados[self.cliente_atual][item]
-                break
+    def editar_item(self, item):
+        dados = self.dados[self.cliente_atual][item]
+        novo_nome = self.janela_texto("Editar Item", item)
+        nova_data = self.janela_texto("Editar Data (dd/mm/aa)", dados["data"] or "")
+
+        if nova_data:
+            data_str_para_date(nova_data)
+        else:
+            nova_data = None
+
+        self.dados[self.cliente_atual].pop(item)
+        self.dados[self.cliente_atual][novo_nome] = {
+            "feito": dados["feito"],
+            "data": nova_data
+        }
         salvar(self.dados)
         self.mostrar_checklist()
         self.atualizar_tarefas()
@@ -209,6 +234,10 @@ class GestorApp:
         self.atualizar_tarefas()
 
     # =================== TAREFAS ===================
+    def aplicar_filtro(self, _):
+        self.filtro_atual = self.combo_filtro.get()
+        self.atualizar_tarefas()
+
     def atualizar_tarefas(self):
         self.tree.delete(*self.tree.get_children())
         hoje = date.today()
@@ -217,20 +246,62 @@ class GestorApp:
             for nome, dados in itens.items():
                 if dados["feito"] or not dados["data"]:
                     continue
-                d = str_para_data(dados["data"])
-                if d < hoje:
-                    tag = "vencida"
-                elif d == hoje:
-                    tag = "hoje"
-                else:
-                    tag = "proxima"
-                self.tree.insert("", tk.END,
-                                 values=(cliente, nome, dados["data"]),
-                                 tags=(tag,))
+                d = data_str_para_date(dados["data"])
 
-        self.tree.tag_configure("vencida", background="#ffcccc")
-        self.tree.tag_configure("hoje", background="#fff3cd")
-        self.tree.tag_configure("proxima", background="#d4edda")
+                status = "Futuras"
+                if d < hoje:
+                    status = "Atrasadas"
+                elif d == hoje:
+                    status = "Hoje"
+
+                if self.filtro_atual != "Todas" and status != self.filtro_atual:
+                    continue
+
+                self.tree.insert("", tk.END,
+                                 values=(cliente, nome, dados["data"]))
+
+    # =================== CALENDÁRIO ===================
+    def mostrar_calendario(self):
+        for w in self.frame_cal.winfo_children():
+            w.destroy()
+
+        cal = calendar.Calendar(calendar.SUNDAY)
+        hoje = date.today()
+
+        ttk.Label(self.frame_cal, text=hoje.strftime("%B %Y"),
+                  style="Header.TLabel").pack()
+
+        grid = ttk.Frame(self.frame_cal)
+        grid.pack()
+
+        dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
+        for i, d in enumerate(dias):
+            ttk.Label(grid, text=d).grid(row=0, column=i)
+
+        for r, semana in enumerate(cal.monthdayscalendar(hoje.year, hoje.month), start=1):
+            for c, dia in enumerate(semana):
+                texto = str(dia) if dia else ""
+                ttk.Label(grid, text=texto).grid(row=r, column=c, padx=4)
+
+    # =================== JANELA TEXTO ===================
+    def janela_texto(self, titulo, valor):
+        top = tk.Toplevel(self.root)
+        top.title(titulo)
+        top.geometry("500x250")
+
+        txt = tk.Text(top, wrap="word")
+        txt.pack(fill=tk.BOTH, expand=True)
+        txt.insert("1.0", valor)
+
+        retorno = []
+
+        def salvar_texto():
+            retorno.append(txt.get("1.0", "end").strip())
+            top.destroy()
+
+        ttk.Button(top, text="OK", command=salvar_texto).pack(pady=4)
+        self.root.wait_window(top)
+        return retorno[0] if retorno else None
 
     # =================== OUTROS ===================
     def importar_json(self):
@@ -241,11 +312,6 @@ class GestorApp:
             self.dados = json.load(f)
         salvar(self.dados)
         self.atualizar_lista()
-
-    def ao_fechar(self):
-        salvar(self.dados)
-        self.root.destroy()
-
 
 # =================== MAIN ===================
 if __name__ == "__main__":
