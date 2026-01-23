@@ -6,6 +6,7 @@ from tkinter import ttk, messagebox, simpledialog, filedialog
 ARQUIVO = "dados.json"
 
 
+# =================== DADOS ===================
 def carregar():
     if not os.path.exists(ARQUIVO):
         return {}
@@ -22,9 +23,7 @@ def validar_json(dados):
     if not isinstance(dados, dict):
         return False
     for cliente, checklist in dados.items():
-        if not isinstance(cliente, str):
-            return False
-        if not isinstance(checklist, dict):
+        if not isinstance(cliente, str) or not isinstance(checklist, dict):
             return False
         for item, status in checklist.items():
             if not isinstance(item, str) or not isinstance(status, bool):
@@ -32,6 +31,7 @@ def validar_json(dados):
     return True
 
 
+# =================== APP ===================
 class GestorApp:
     def __init__(self, root):
         self.root = root
@@ -43,14 +43,22 @@ class GestorApp:
         self.cliente_atual = None
         self.check_vars = {}
 
+        self.configurar_estilo()
         self.build_ui()
         self.atualizar_lista()
 
-    # ---------- INTERFACE ----------
-    def build_ui(self):
+    # =================== ESTILO ===================
+    def configurar_estilo(self):
         style = ttk.Style()
-        style.theme_use("default")
+        style.theme_use("clam")  # melhor tema nativo
 
+        style.configure("TLabel", font=("Segoe UI", 10))
+        style.configure("Header.TLabel", font=("Segoe UI", 12, "bold"))
+        style.configure("TButton", font=("Segoe UI", 9), padding=6)
+        style.configure("TCheckbutton", font=("Segoe UI", 10))
+
+    # =================== UI ===================
+    def build_ui(self):
         self.left = ttk.Frame(self.root, padding=10)
         self.left.pack(side=tk.LEFT, fill=tk.Y)
 
@@ -62,52 +70,72 @@ class GestorApp:
         self.var_pesquisa.trace_add("write", lambda *_: self.atualizar_lista())
         ttk.Entry(self.left, textvariable=self.var_pesquisa).pack(fill=tk.X, pady=5)
 
-        ttk.Label(self.left, text="Clientes", font=("Segoe UI", 10, "bold")).pack(anchor="w")
-        self.lista = tk.Listbox(self.left, width=34)
-        self.lista.pack(fill=tk.Y, expand=True)
+        ttk.Label(self.left, text="Clientes", style="Header.TLabel").pack(anchor="w")
+        self.lista = tk.Listbox(self.left, width=32, relief=tk.FLAT)
+        self.lista.pack(fill=tk.Y, expand=True, pady=5)
         self.lista.bind("<<ListboxSelect>>", self.selecionar_cliente)
 
-        ttk.Button(self.left, text="Novo Cliente", command=self.novo_cliente).pack(fill=tk.X, pady=3)
-        ttk.Button(self.left, text="Editar Cliente", command=self.editar_cliente).pack(fill=tk.X, pady=3)
-        ttk.Button(self.left, text="Remover Cliente", command=self.remover_cliente).pack(fill=tk.X, pady=3)
-        ttk.Separator(self.left).pack(fill=tk.X, pady=6)
-        ttk.Button(self.left, text="Importar JSON", command=self.importar_json).pack(fill=tk.X, pady=3)
+        ttk.Button(self.left, text="Novo Cliente",
+                   command=self.novo_cliente).pack(fill=tk.X, pady=2)
+        ttk.Button(self.left, text="Editar Cliente",
+                   command=self.editar_cliente).pack(fill=tk.X, pady=2)
+        ttk.Button(self.left, text="Remover Cliente",
+                   command=self.remover_cliente).pack(fill=tk.X, pady=2)
+
+        ttk.Separator(self.left).pack(fill=tk.X, pady=8)
+        ttk.Button(self.left, text="Importar JSON",
+                   command=self.importar_json).pack(fill=tk.X)
 
         self.lbl_cliente = ttk.Label(
             self.right,
             text="Selecione um cliente",
-            font=("Segoe UI", 11, "bold")
+            style="Header.TLabel"
         )
         self.lbl_cliente.pack(anchor="w")
 
-        self.frame_checks = ttk.Frame(self.right)
-        self.frame_checks.pack(fill=tk.BOTH, expand=True, pady=10)
+        # --------- CHECKLIST COM SCROLL ---------
+        self.canvas = tk.Canvas(self.right, highlightthickness=0)
+        self.scroll = ttk.Scrollbar(self.right, orient=tk.VERTICAL,
+                                    command=self.canvas.yview)
+        self.frame_checks = ttk.Frame(self.canvas)
+
+        self.frame_checks.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(
+                scrollregion=self.canvas.bbox("all"))
+        )
+
+        self.canvas.create_window((0, 0),
+                                  window=self.frame_checks,
+                                  anchor="nw")
+        self.canvas.configure(yscrollcommand=self.scroll.set)
+
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, pady=10)
+        self.scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
         btns = ttk.Frame(self.right)
         btns.pack(fill=tk.X)
 
-        ttk.Button(btns, text="Adicionar Item", command=self.adicionar_item).pack(side=tk.LEFT)
-        ttk.Button(btns, text="Remover Item Selecionado",
+        ttk.Button(btns, text="Adicionar Item",
+                   command=self.adicionar_item).pack(side=tk.LEFT)
+        ttk.Button(btns, text="Remover Item Marcado",
                    command=self.remover_item_selecionado).pack(side=tk.LEFT, padx=5)
         ttk.Button(btns, text="Limpar Marcações",
                    command=self.limpar_marcacoes).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btns, text="Salvar", command=self.salvar_checklist).pack(side=tk.RIGHT)
+        ttk.Button(btns, text="Salvar",
+                   command=self.salvar_checklist).pack(side=tk.RIGHT)
 
-    # ---------- CLIENTES ----------
+    # =================== CLIENTES ===================
     def atualizar_lista(self):
         termo = self.var_pesquisa.get().lower()
-        clientes = sorted(self.dados.keys(), key=str.lower)
         self.lista.delete(0, tk.END)
-        for cliente in clientes:
+        for cliente in sorted(self.dados.keys(), key=str.lower):
             if termo in cliente.lower():
                 self.lista.insert(tk.END, cliente)
 
     def novo_cliente(self):
         nome = simpledialog.askstring("Novo Cliente", "Nome do cliente:")
-        if not nome:
-            return
-        if nome in self.dados:
-            messagebox.showerror("Erro", "Cliente já existe.")
+        if not nome or nome in self.dados:
             return
         self.dados[nome] = {}
         salvar(self.dados)
@@ -121,10 +149,7 @@ class GestorApp:
             "Novo nome:",
             initialvalue=self.cliente_atual
         )
-        if not novo or novo == self.cliente_atual:
-            return
-        if novo in self.dados:
-            messagebox.showerror("Erro", "Cliente já existe.")
+        if not novo or novo in self.dados:
             return
         self.dados[novo] = self.dados.pop(self.cliente_atual)
         self.cliente_atual = novo
@@ -135,10 +160,8 @@ class GestorApp:
     def remover_cliente(self):
         if not self.cliente_atual:
             return
-        if messagebox.askyesno(
-            "Confirmar",
-            f"Remover '{self.cliente_atual}' e todo o checklist?"
-        ):
+        if messagebox.askyesno("Confirmar",
+                               f"Remover '{self.cliente_atual}'?"):
             del self.dados[self.cliente_atual]
             self.cliente_atual = None
             salvar(self.dados)
@@ -147,52 +170,25 @@ class GestorApp:
             for w in self.frame_checks.winfo_children():
                 w.destroy()
 
-    # ---------- IMPORTAÇÃO ----------
+    # =================== IMPORTAÇÃO ===================
     def importar_json(self):
         caminho = filedialog.askopenfilename(
-            title="Importar arquivo JSON",
             filetypes=[("Arquivos JSON", "*.json")]
         )
         if not caminho:
             return
-
-        try:
-            with open(caminho, "r", encoding="utf-8") as f:
-                dados_importados = json.load(f)
-        except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao ler arquivo:\n{e}")
-            return
+        with open(caminho, "r", encoding="utf-8") as f:
+            dados_importados = json.load(f)
 
         if not validar_json(dados_importados):
-            messagebox.showerror(
-                "Erro",
-                "O arquivo JSON não é compatível com este sistema."
-            )
+            messagebox.showerror("Erro", "JSON incompatível")
             return
 
-        escolha = messagebox.askyesnocancel(
-            "Importar JSON",
-            "Deseja MESCLAR com os dados atuais?\n\n"
-            "Sim = Mesclar\nNão = Substituir tudo"
-        )
-
-        if escolha is None:
-            return
-
-        if escolha:
-            for cliente, checklist in dados_importados.items():
-                if cliente not in self.dados:
-                    self.dados[cliente] = checklist
-                else:
-                    self.dados[cliente].update(checklist)
-        else:
-            self.dados = dados_importados
-
+        self.dados.update(dados_importados)
         salvar(self.dados)
         self.atualizar_lista()
-        messagebox.showinfo("Sucesso", "Dados importados com sucesso.")
 
-    # ---------- CHECKLIST ----------
+    # =================== CHECKLIST ===================
     def selecionar_cliente(self, _):
         if not self.lista.curselection():
             return
@@ -204,9 +200,12 @@ class GestorApp:
         for w in self.frame_checks.winfo_children():
             w.destroy()
         self.check_vars.clear()
+
         for item, status in self.dados[self.cliente_atual].items():
             var = tk.BooleanVar(value=status)
-            ttk.Checkbutton(self.frame_checks, text=item, variable=var).pack(anchor="w")
+            ttk.Checkbutton(self.frame_checks,
+                            text=item,
+                            variable=var).pack(anchor="w", pady=2)
             self.check_vars[item] = var
 
     def adicionar_item(self):
@@ -222,45 +221,29 @@ class GestorApp:
     def remover_item_selecionado(self):
         selecionados = [i for i, v in self.check_vars.items() if v.get()]
         if not selecionados:
-            messagebox.showwarning("Aviso", "Marque o item a remover.")
+            messagebox.showwarning("Aviso", "Marque um item")
             return
-        item = selecionados[0]
-        if messagebox.askyesno("Confirmar", f"Remover '{item}'?"):
-            del self.dados[self.cliente_atual][item]
-            salvar(self.dados)
-            self.mostrar_checklist()
+        del self.dados[self.cliente_atual][selecionados[0]]
+        salvar(self.dados)
+        self.mostrar_checklist()
 
     def limpar_marcacoes(self):
-        if messagebox.askyesno(
-            "Confirmar",
-            "Deseja limpar todas as marcações deste checklist?"
-        ):
-            for item in self.dados[self.cliente_atual]:
-                self.dados[self.cliente_atual][item] = False
-            salvar(self.dados)
-            self.mostrar_checklist()
+        for item in self.dados[self.cliente_atual]:
+            self.dados[self.cliente_atual][item] = False
+        salvar(self.dados)
+        self.mostrar_checklist()
 
     def salvar_checklist(self):
         for item, var in self.check_vars.items():
             self.dados[self.cliente_atual][item] = var.get()
         salvar(self.dados)
-        messagebox.showinfo("Salvo", "Checklist salvo com sucesso.")
 
-    # ---------- FECHAR ----------
     def ao_fechar(self):
-        resp = messagebox.askyesnocancel(
-            "Sair",
-            "Deseja salvar os checklists antes de sair?"
-        )
-        if resp is None:
-            return
-        if resp:
-            for item, var in self.check_vars.items():
-                self.dados[self.cliente_atual][item] = var.get()
-            salvar(self.dados)
+        salvar(self.dados)
         self.root.destroy()
 
 
+# =================== MAIN ===================
 if __name__ == "__main__":
     root = tk.Tk()
     GestorApp(root)
