@@ -54,13 +54,39 @@ class GestorApp:
     def configurar_estilo(self):
         style = ttk.Style()
         style.theme_use("clam")
-
+    
+        azul = "#1f6aa5"
+        azul_claro = "#cce0f5"
+    
+        # ===== Labels =====
+        style.configure("TLabel", background="white", foreground="black")
         style.configure("Header.TLabel",
                         font=("Segoe UI", 12, "bold"),
-                        foreground="#1f6aa5")
-
-        style.configure("Treeview", rowheight=26)
-        style.map("Treeview", background=[("selected", "#cce0f5")])
+                        foreground=azul,
+                        background="white")
+    
+        # ===== Treeview =====
+        style.configure("Treeview",
+                        background="white",
+                        fieldbackground="white",
+                        foreground="black",
+                        rowheight=26)
+        style.map("Treeview",
+                  background=[("selected", azul_claro)],
+                  foreground=[("selected", "black")])
+    
+        # ===== Frame da checklist =====
+        style.configure("TFrame", background="white")
+        style.configure("Selected.TFrame", background=azul_claro)
+    
+        # ===== Botões =====
+        style.configure("TButton",
+                        padding=6,
+                        background="white",
+                        foreground="black")
+        style.map("TButton",
+                  background=[("active", "#e6f0fa")],
+                  foreground=[("disabled", "#888")])
 
     # =================== UI ===================
     def build_ui(self):
@@ -176,23 +202,37 @@ class GestorApp:
     def mostrar_checklist(self):
         for w in self.frame_checks.winfo_children():
             w.destroy()
-
+    
         self.check_vars.clear()
         self.item_selecionado = None
-
+        self.linhas_check = {}  # para poder destacar a linha selecionada
+    
         for item, dados in self.dados[self.cliente_atual].items():
             linha = ttk.Frame(self.frame_checks)
             linha.pack(fill=tk.X, pady=2)
-
+            self.linhas_check[item] = linha
+    
             var = tk.BooleanVar(value=dados["feito"])
-            ttk.Checkbutton(linha, variable=var).pack(side=tk.LEFT)
-
+            chk = ttk.Checkbutton(linha, variable=var)
+            chk.pack(side=tk.LEFT)
+    
             lbl = ttk.Label(linha, text=item, width=50, anchor="w")
             lbl.pack(side=tk.LEFT)
-            lbl.bind("<Button-1>", lambda e, i=item: self.selecionar_item(i))
-
+    
             ttk.Label(linha, text=dados["data"] or "—", width=10).pack(side=tk.LEFT)
-
+    
+            # Bind em toda a linha
+            def selecionar(e, nome=item):
+                # Desmarca destaque da linha anterior
+                if self.item_selecionado and self.item_selecionado in self.linhas_check:
+                    self.linhas_check[self.item_selecionado].configure(style="TFrame")
+                self.item_selecionado = nome
+                linha.configure(style="Selected.TFrame")  # estilo para destacar
+    
+            linha.bind("<Button-1>", selecionar)
+            lbl.bind("<Button-1>", selecionar)
+            chk.bind("<Button-1>", selecionar)  # clique no checkbox também seleciona
+    
             self.check_vars[item] = var
 
     def selecionar_item(self, item):
