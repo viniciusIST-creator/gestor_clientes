@@ -2,6 +2,7 @@ import json
 import os
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, filedialog
+from datetime import datetime, date
 
 ARQUIVO = "dados.json"
 
@@ -11,7 +12,14 @@ def carregar():
     if not os.path.exists(ARQUIVO):
         return {}
     with open(ARQUIVO, "r", encoding="utf-8") as f:
-        return json.load(f)
+        dados = json.load(f)
+
+    # MIGRAÇÃO AUTOMÁTICA (bool -> dict)
+    for cliente, itens in dados.items():
+        for nome, valor in list(itens.items()):
+            if isinstance(valor, bool):
+                itens[nome] = {"feito": valor, "data": None}
+    return dados
 
 
 def salvar(dados):
@@ -19,16 +27,8 @@ def salvar(dados):
         json.dump(dados, f, indent=4, ensure_ascii=False)
 
 
-def validar_json(dados):
-    if not isinstance(dados, dict):
-        return False
-    for cliente, checklist in dados.items():
-        if not isinstance(cliente, str) or not isinstance(checklist, dict):
-            return False
-        for item, status in checklist.items():
-            if not isinstance(item, str) or not isinstance(status, bool):
-                return False
-    return True
+def str_para_data(s):
+    return datetime.strptime(s, "%d/%m/%Y").date()
 
 
 # =================== APP ===================
@@ -36,7 +36,7 @@ class GestorApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Me lembra se não eu esqueço – Vinicius")
-        self.root.geometry("980x540")
+        self.root.geometry("1200x560")
         self.root.protocol("WM_DELETE_WINDOW", self.ao_fechar)
 
         self.dados = carregar()
@@ -50,29 +50,24 @@ class GestorApp:
     # =================== ESTILO ===================
     def configurar_estilo(self):
         style = ttk.Style()
-        style.theme_use("clam")  # melhor tema nativo
-
-        style.configure("TLabel", font=("Segoe UI", 10))
+        style.theme_use("clam")
         style.configure("Header.TLabel", font=("Segoe UI", 12, "bold"))
-        style.configure("TButton", font=("Segoe UI", 9), padding=6)
-        style.configure("TCheckbutton", font=("Segoe UI", 10))
 
     # =================== UI ===================
     def build_ui(self):
         self.left = ttk.Frame(self.root, padding=10)
         self.left.pack(side=tk.LEFT, fill=tk.Y)
 
+        self.middle = ttk.Frame(self.root, padding=10)
+        self.middle.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
         self.right = ttk.Frame(self.root, padding=10)
-        self.right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        self.right.pack(side=tk.RIGHT, fill=tk.BOTH)
 
-        ttk.Label(self.left, text="Pesquisar cliente").pack(anchor="w")
-        self.var_pesquisa = tk.StringVar()
-        self.var_pesquisa.trace_add("write", lambda *_: self.atualizar_lista())
-        ttk.Entry(self.left, textvariable=self.var_pesquisa).pack(fill=tk.X, pady=5)
-
+        # -------- CLIENTES --------
         ttk.Label(self.left, text="Clientes", style="Header.TLabel").pack(anchor="w")
-        self.lista = tk.Listbox(self.left, width=32, relief=tk.FLAT)
-        self.lista.pack(fill=tk.Y, expand=True, pady=5)
+        self.lista = tk.Listbox(self.left, width=30)
+        self.lista.pack(fill=tk.Y, expand=True)
         self.lista.bind("<<ListboxSelect>>", self.selecionar_cliente)
 
         ttk.Button(self.left, text="Novo Cliente",
@@ -81,112 +76,72 @@ class GestorApp:
                    command=self.editar_cliente).pack(fill=tk.X, pady=2)
         ttk.Button(self.left, text="Remover Cliente",
                    command=self.remover_cliente).pack(fill=tk.X, pady=2)
-
-        ttk.Separator(self.left).pack(fill=tk.X, pady=8)
         ttk.Button(self.left, text="Importar JSON",
-                   command=self.importar_json).pack(fill=tk.X)
+                   command=self.importar_json).pack(fill=tk.X, pady=6)
 
-        self.lbl_cliente = ttk.Label(
-            self.right,
-            text="Selecione um cliente",
-            style="Header.TLabel"
-        )
+        # -------- ITENS --------
+        self.lbl_cliente = ttk.Label(self.middle, text="Checklist",
+                                     style="Header.TLabel")
         self.lbl_cliente.pack(anchor="w")
 
-        # --------- CHECKLIST COM SCROLL ---------
-        self.canvas = tk.Canvas(self.right, highlightthickness=0)
-        self.scroll = ttk.Scrollbar(self.right, orient=tk.VERTICAL,
-                                    command=self.canvas.yview)
-        self.frame_checks = ttk.Frame(self.canvas)
+        self.frame_checks = ttk.Frame(self.middle)
+        self.frame_checks.pack(fill=tk.BOTH, expand=True)
 
-        self.frame_checks.bind(
-            "<Configure>",
-            lambda e: self.canvas.configure(
-                scrollregion=self.canvas.bbox("all"))
-        )
-
-        self.canvas.create_window((0, 0),
-                                  window=self.frame_checks,
-                                  anchor="nw")
-        self.canvas.configure(yscrollcommand=self.scroll.set)
-
-        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, pady=10)
-        self.scroll.pack(side=tk.RIGHT, fill=tk.Y)
-
-        btns = ttk.Frame(self.right)
-        btns.pack(fill=tk.X)
-
-        ttk.Button(btns, text="Adicionar Item",
+        ttk.Button(self.middle, text="Adicionar Item",
                    command=self.adicionar_item).pack(side=tk.LEFT)
-        ttk.Button(btns, text="Remover Item Marcado",
+        ttk.Button(self.middle, text="Remover Item Marcado",
                    command=self.remover_item_selecionado).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btns, text="Limpar Marcações",
-                   command=self.limpar_marcacoes).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btns, text="Salvar",
+        ttk.Button(self.middle, text="Salvar",
                    command=self.salvar_checklist).pack(side=tk.RIGHT)
+
+        # -------- TAREFAS POR DATA --------
+        ttk.Label(self.right, text="Tarefas por Data",
+                  style="Header.TLabel").pack(anchor="w")
+
+        self.tree = ttk.Treeview(
+            self.right,
+            columns=("cliente", "item", "data"),
+            show="headings",
+            height=20
+        )
+        self.tree.heading("cliente", text="Cliente")
+        self.tree.heading("item", text="Item")
+        self.tree.heading("data", text="Data")
+        self.tree.pack(fill=tk.BOTH, expand=True)
 
     # =================== CLIENTES ===================
     def atualizar_lista(self):
-        termo = self.var_pesquisa.get().lower()
         self.lista.delete(0, tk.END)
-        for cliente in sorted(self.dados.keys(), key=str.lower):
-            if termo in cliente.lower():
-                self.lista.insert(tk.END, cliente)
+        for c in sorted(self.dados.keys()):
+            self.lista.insert(tk.END, c)
 
     def novo_cliente(self):
-        nome = simpledialog.askstring("Novo Cliente", "Nome do cliente:")
-        if not nome or nome in self.dados:
-            return
-        self.dados[nome] = {}
-        salvar(self.dados)
-        self.atualizar_lista()
+        nome = simpledialog.askstring("Novo Cliente", "Nome:")
+        if nome and nome not in self.dados:
+            self.dados[nome] = {}
+            salvar(self.dados)
+            self.atualizar_lista()
 
     def editar_cliente(self):
         if not self.cliente_atual:
             return
-        novo = simpledialog.askstring(
-            "Editar Cliente",
-            "Novo nome:",
-            initialvalue=self.cliente_atual
-        )
-        if not novo or novo in self.dados:
-            return
-        self.dados[novo] = self.dados.pop(self.cliente_atual)
-        self.cliente_atual = novo
-        salvar(self.dados)
-        self.atualizar_lista()
-        self.lbl_cliente.config(text=f"Checklist – {novo}")
+        novo = simpledialog.askstring("Editar", "Novo nome:",
+                                      initialvalue=self.cliente_atual)
+        if novo:
+            self.dados[novo] = self.dados.pop(self.cliente_atual)
+            self.cliente_atual = novo
+            salvar(self.dados)
+            self.atualizar_lista()
 
     def remover_cliente(self):
-        if not self.cliente_atual:
-            return
-        if messagebox.askyesno("Confirmar",
-                               f"Remover '{self.cliente_atual}'?"):
+        if self.cliente_atual and messagebox.askyesno("Confirmar", "Remover cliente?"):
             del self.dados[self.cliente_atual]
             self.cliente_atual = None
             salvar(self.dados)
             self.atualizar_lista()
-            self.lbl_cliente.config(text="Selecione um cliente")
-            for w in self.frame_checks.winfo_children():
-                w.destroy()
-
-    # =================== IMPORTAÇÃO ===================
-    def importar_json(self):
-        caminho = filedialog.askopenfilename(
-            filetypes=[("Arquivos JSON", "*.json")]
-        )
-        if not caminho:
-            return
-        with open(caminho, "r", encoding="utf-8") as f:
-            dados_importados = json.load(f)
-
-        if not validar_json(dados_importados):
-            messagebox.showerror("Erro", "JSON incompatível")
-            return
-
-        self.dados.update(dados_importados)
-        salvar(self.dados)
-        self.atualizar_lista()
+            self.frame_checks.destroy()
+            self.frame_checks = ttk.Frame(self.middle)
+            self.frame_checks.pack(fill=tk.BOTH, expand=True)
 
     # =================== CHECKLIST ===================
     def selecionar_cliente(self, _):
@@ -195,48 +150,97 @@ class GestorApp:
         self.cliente_atual = self.lista.get(self.lista.curselection())
         self.lbl_cliente.config(text=f"Checklist – {self.cliente_atual}")
         self.mostrar_checklist()
+        self.atualizar_tarefas()
 
     def mostrar_checklist(self):
         for w in self.frame_checks.winfo_children():
             w.destroy()
         self.check_vars.clear()
 
-        for item, status in self.dados[self.cliente_atual].items():
-            var = tk.BooleanVar(value=status)
+        for item, dados in self.dados[self.cliente_atual].items():
+            var = tk.BooleanVar(value=dados["feito"])
+            texto = f"{item}  |  {dados['data'] or '—'}"
             ttk.Checkbutton(self.frame_checks,
-                            text=item,
-                            variable=var).pack(anchor="w", pady=2)
+                            text=texto,
+                            variable=var).pack(anchor="w")
             self.check_vars[item] = var
 
     def adicionar_item(self):
         if not self.cliente_atual:
             return
-        item = simpledialog.askstring("Adicionar Item", "Descrição:")
-        if not item:
+        nome = simpledialog.askstring("Item", "Descrição:")
+        if not nome:
             return
-        self.dados[self.cliente_atual][item] = False
+
+        data = simpledialog.askstring(
+            "Data",
+            "Data (dd/mm/aaaa) ou vazio:"
+        )
+        if data:
+            try:
+                str_para_data(data)
+            except:
+                messagebox.showerror("Erro", "Data inválida")
+                return
+        else:
+            data = None
+
+        self.dados[self.cliente_atual][nome] = {
+            "feito": False,
+            "data": data
+        }
         salvar(self.dados)
         self.mostrar_checklist()
+        self.atualizar_tarefas()
 
     def remover_item_selecionado(self):
-        selecionados = [i for i, v in self.check_vars.items() if v.get()]
-        if not selecionados:
-            messagebox.showwarning("Aviso", "Marque um item")
-            return
-        del self.dados[self.cliente_atual][selecionados[0]]
+        for item, var in self.check_vars.items():
+            if var.get():
+                del self.dados[self.cliente_atual][item]
+                break
         salvar(self.dados)
         self.mostrar_checklist()
-
-    def limpar_marcacoes(self):
-        for item in self.dados[self.cliente_atual]:
-            self.dados[self.cliente_atual][item] = False
-        salvar(self.dados)
-        self.mostrar_checklist()
+        self.atualizar_tarefas()
 
     def salvar_checklist(self):
         for item, var in self.check_vars.items():
-            self.dados[self.cliente_atual][item] = var.get()
+            self.dados[self.cliente_atual][item]["feito"] = var.get()
         salvar(self.dados)
+        self.atualizar_tarefas()
+
+    # =================== TAREFAS ===================
+    def atualizar_tarefas(self):
+        self.tree.delete(*self.tree.get_children())
+        hoje = date.today()
+
+        for cliente, itens in self.dados.items():
+            for nome, dados in itens.items():
+                if dados["feito"] or not dados["data"]:
+                    continue
+                d = str_para_data(dados["data"])
+                if d < hoje:
+                    tag = "vencida"
+                elif d == hoje:
+                    tag = "hoje"
+                else:
+                    tag = "proxima"
+                self.tree.insert("", tk.END,
+                                 values=(cliente, nome, dados["data"]),
+                                 tags=(tag,))
+
+        self.tree.tag_configure("vencida", background="#ffcccc")
+        self.tree.tag_configure("hoje", background="#fff3cd")
+        self.tree.tag_configure("proxima", background="#d4edda")
+
+    # =================== OUTROS ===================
+    def importar_json(self):
+        caminho = filedialog.askopenfilename(filetypes=[("JSON", "*.json")])
+        if not caminho:
+            return
+        with open(caminho, "r", encoding="utf-8") as f:
+            self.dados = json.load(f)
+        salvar(self.dados)
+        self.atualizar_lista()
 
     def ao_fechar(self):
         salvar(self.dados)
