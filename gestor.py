@@ -20,7 +20,6 @@ def carregar():
     with open(ARQUIVO, "r", encoding="utf-8") as f:
         dados = json.load(f)
 
-    # compatibilidade com versões antigas
     for cliente, itens in dados.items():
         for nome, valor in list(itens.items()):
             if isinstance(valor, bool):
@@ -43,6 +42,7 @@ class GestorApp:
 
         self.dados = carregar()
         self.cliente_atual = None
+        self.item_selecionado = None
         self.check_vars = {}
         self.filtro_atual = "Todas"
 
@@ -58,21 +58,9 @@ class GestorApp:
         azul = "#1f6aa5"
 
         style.configure(".", background="white", foreground="black")
-        style.configure("TLabel", background="white")
-        style.configure("Header.TLabel",
-                        font=("Segoe UI", 12, "bold"),
-                        foreground=azul)
-
-        style.configure("TButton", padding=6)
-        style.map("TButton",
-                  background=[("active", "#e6f0fa")])
-
-        style.configure("Treeview",
-                        background="white",
-                        fieldbackground="white",
-                        rowheight=24)
-        style.map("Treeview",
-                  background=[("selected", "#cce0f5")])
+        style.configure("Header.TLabel", font=("Segoe UI", 12, "bold"), foreground=azul)
+        style.configure("Treeview", rowheight=24)
+        style.map("Treeview", background=[("selected", "#cce0f5")])
 
     # =================== UI ===================
     def build_ui(self):
@@ -90,10 +78,7 @@ class GestorApp:
 
         self.lista = tk.Listbox(
             self.left, width=30,
-            bg="white", fg="black",
-            selectbackground="#cce0f5",
-            highlightthickness=1,
-            highlightcolor="#1f6aa5"
+            selectbackground="#cce0f5"
         )
         self.lista.pack(fill=tk.Y, expand=True)
         self.lista.bind("<<ListboxSelect>>", self.selecionar_cliente)
@@ -108,12 +93,13 @@ class GestorApp:
         self.lbl_cliente.pack(anchor="w")
 
         self.frame_checks = ttk.Frame(self.middle)
-        self.frame_checks.pack(fill=tk.BOTH, expand=True, pady=4)
+        self.frame_checks.pack(fill=tk.BOTH, expand=True)
 
         botoes = ttk.Frame(self.middle)
         botoes.pack(fill=tk.X)
 
         ttk.Button(botoes, text="Adicionar Item", command=self.adicionar_item).pack(side=tk.LEFT)
+        ttk.Button(botoes, text="Editar Tarefa", command=self.editar_item).pack(side=tk.LEFT, padx=6)
         ttk.Button(botoes, text="Salvar", command=self.salvar_checklist).pack(side=tk.RIGHT)
 
         # ---------- TABELA 3 ----------
@@ -137,6 +123,10 @@ class GestorApp:
         for c in ("cliente", "item", "data"):
             self.tree.heading(c, text=c.capitalize())
             self.tree.column(c, anchor="w")
+
+        self.tree.tag_configure("atrasada", foreground="red")
+        self.tree.tag_configure("hoje", foreground="orange")
+        self.tree.tag_configure("futura", foreground="green")
 
         self.tree.pack(fill=tk.BOTH, expand=True)
 
@@ -186,7 +176,9 @@ class GestorApp:
     def mostrar_checklist(self):
         for w in self.frame_checks.winfo_children():
             w.destroy()
+
         self.check_vars.clear()
+        self.item_selecionado = None
 
         for item, dados in self.dados[self.cliente_atual].items():
             linha = ttk.Frame(self.frame_checks)
@@ -195,53 +187,52 @@ class GestorApp:
             var = tk.BooleanVar(value=dados["feito"])
             ttk.Checkbutton(linha, variable=var).pack(side=tk.LEFT)
 
-            ttk.Label(linha, text=item, width=50, anchor="w").pack(side=tk.LEFT)
+            lbl = ttk.Label(linha, text=item, width=50, anchor="w")
+            lbl.pack(side=tk.LEFT)
+            lbl.bind("<Button-1>", lambda e, i=item: self.selecionar_item(i))
+
             ttk.Label(linha, text=dados["data"] or "—", width=10).pack(side=tk.LEFT)
-
-            ttk.Button(linha, text="Editar",
-                       command=lambda i=item: self.editar_item(i)).pack(side=tk.LEFT)
-
             self.check_vars[item] = var
 
+    def selecionar_item(self, item):
+        self.item_selecionado = item
+
     def adicionar_item(self):
-        nome = self.janela_texto("Nova Tarefa", "")
-        if not nome:
+        if not self.cliente_atual:
+            return
+        res = self.janela_tarefa("Nova Tarefa")
+        if not res:
             return
 
-        data = self.janela_texto("Data (dd/mm/aa)", "")
-        if data:
-            try:
-                data_str_para_date(data)
-            except:
-                messagebox.showerror("Erro", "Data inválida")
-                return
-        else:
-            data = None
-
-        self.dados[self.cliente_atual][nome] = {"feito": False, "data": data}
+        self.dados[self.cliente_atual][res["texto"]] = {
+            "feito": False,
+            "data": res["data"]
+        }
         salvar(self.dados)
         self.mostrar_checklist()
         self.atualizar_tarefas()
 
-    def editar_item(self, item):
-        dados = self.dados[self.cliente_atual][item]
-
-        novo_nome = self.janela_texto("Editar Tarefa", item)
-        if not novo_nome:
+    def editar_item(self):
+        if not self.item_selecionado:
+            messagebox.showwarning("Aviso", "Selecione uma tarefa")
             return
 
-        nova_data = self.janela_texto("Editar Data (dd/mm/aa)", dados["data"] or "")
-        if nova_data:
-            data_str_para_date(nova_data)
-        else:
-            nova_data = None
+        dados = self.dados[self.cliente_atual][self.item_selecionado]
+        res = self.janela_tarefa(
+            "Editar Tarefa",
+            self.item_selecionado,
+            dados["data"] or ""
+        )
+        if not res:
+            return
 
-        self.dados[self.cliente_atual].pop(item)
-        self.dados[self.cliente_atual][novo_nome] = {
+        self.dados[self.cliente_atual].pop(self.item_selecionado)
+        self.dados[self.cliente_atual][res["texto"]] = {
             "feito": dados["feito"],
-            "data": nova_data
+            "data": res["data"]
         }
 
+        self.item_selecionado = None
         salvar(self.dados)
         self.mostrar_checklist()
         self.atualizar_tarefas()
@@ -267,30 +258,41 @@ class GestorApp:
                     continue
 
                 d = data_str_para_date(dados["data"])
+                tag = "futura"
                 status = "Futuras"
+
                 if d < hoje:
+                    tag = "atrasada"
                     status = "Atrasadas"
                 elif d == hoje:
+                    tag = "hoje"
                     status = "Hoje"
 
                 if self.filtro_atual != "Todas" and status != self.filtro_atual:
                     continue
 
                 self.tree.insert("", tk.END,
-                                 values=(cliente, nome, dados["data"]))
+                                 values=(cliente, nome, dados["data"]),
+                                 tags=(tag,))
 
     # =================== CALENDÁRIO ===================
     def mostrar_calendario(self):
         for w in self.frame_cal.winfo_children():
             w.destroy()
 
-        cal = calendar.Calendar(calendar.SUNDAY)
         hoje = date.today()
+        meses = [
+            "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+            "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+        ]
 
-        ttk.Label(self.frame_cal,
-                  text=hoje.strftime("%B %Y"),
-                  style="Header.TLabel").pack()
+        ttk.Label(
+            self.frame_cal,
+            text=f"{meses[hoje.month - 1]} {hoje.year}",
+            style="Header.TLabel"
+        ).pack()
 
+        cal = calendar.Calendar(calendar.SUNDAY)
         grid = ttk.Frame(self.frame_cal)
         grid.pack()
 
@@ -302,37 +304,88 @@ class GestorApp:
             for c, dia in enumerate(semana):
                 ttk.Label(grid, text=str(dia) if dia else "").grid(row=r, column=c, padx=4)
 
-    # =================== JANELA TEXTO ===================
+    # =================== JANELAS ===================
     def janela_texto(self, titulo, valor):
         top = tk.Toplevel(self.root)
         top.title(titulo)
-        top.geometry("480x220")
+        top.geometry("300x120")
+        top.grab_set()
+
+        frame = ttk.Frame(top, padding=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        entry = ttk.Entry(frame)
+        entry.pack(fill=tk.X)
+        entry.insert(0, valor)
+        entry.focus()
+
+        resultado = {}
+
+        def confirmar(event=None):
+            texto = entry.get().strip()
+            if texto:
+                resultado["valor"] = texto
+                top.destroy()
+
+        top.bind("<Return>", confirmar)
+
+        ttk.Button(frame, text="OK", command=confirmar).pack(pady=8)
+        self.root.wait_window(top)
+        return resultado.get("valor")
+
+    def janela_tarefa(self, titulo, desc="", data=""):
+        top = tk.Toplevel(self.root)
+        top.title(titulo)
+        top.geometry("360x150")
         top.resizable(False, False)
         top.grab_set()
 
         frame = ttk.Frame(top, padding=10)
         frame.pack(fill=tk.BOTH, expand=True)
 
-        txt = tk.Text(frame, wrap="word", height=6)
-        txt.pack(fill=tk.BOTH, expand=True)
-        txt.insert("1.0", valor)
+        ttk.Label(frame, text="Descrição:").pack(anchor="w")
+        entry_desc = ttk.Entry(frame)
+        entry_desc.pack(fill=tk.X)
+        entry_desc.insert(0, desc)
+        entry_desc.focus()
 
-        resultado = []
+        ttk.Label(frame, text="Data (dd/mm/aa):").pack(anchor="w", pady=(6, 0))
+        entry_data = ttk.Entry(frame)
+        entry_data.pack(fill=tk.X)
+        entry_data.insert(0, data)
 
-        def confirmar():
-            resultado.append(txt.get("1.0", "end").strip())
+        resultado = {}
+
+        def confirmar(event=None):
+            texto = entry_desc.get().strip()
+            data_txt = entry_data.get().strip()
+
+            if not texto:
+                messagebox.showwarning("Aviso", "Descrição obrigatória")
+                return
+
+            if data_txt:
+                try:
+                    datetime.strptime(data_txt, "%d/%m/%y")
+                except:
+                    messagebox.showerror("Erro", "Data inválida (dd/mm/aa)")
+                    return
+
+            resultado["texto"] = texto
+            resultado["data"] = data_txt or None
             top.destroy()
 
+        top.bind("<Return>", confirmar)
+
         botoes = ttk.Frame(frame)
-        botoes.pack(pady=6)
+        botoes.pack(pady=8)
 
         ttk.Button(botoes, text="OK", command=confirmar).pack(side=tk.RIGHT)
         ttk.Button(botoes, text="Cancelar", command=top.destroy).pack(side=tk.RIGHT, padx=6)
 
         self.root.wait_window(top)
-        return resultado[0] if resultado else None
+        return resultado if resultado else None
 
-    # =================== OUTROS ===================
     def importar_json(self):
         caminho = filedialog.askopenfilename(filetypes=[("JSON", "*.json")])
         if not caminho:
