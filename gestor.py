@@ -224,6 +224,10 @@ class GestorApp:
             self.cliente_atual = None
             salvar(self.dados)
             self.atualizar_lista()
+            self.limpar_checklist()
+            self.salvar_checklist()
+            self.mostrar_calendario()
+            self.atualizar_tarefas()
 
     # =================== CHECKLIST ===================
     def selecionar_cliente(self, _):
