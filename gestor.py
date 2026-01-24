@@ -316,18 +316,28 @@ class GestorApp:
             lbl_data.pack(side=tk.LEFT)
     
             # -------- SELEÇÃO DA LINHA (realce total) --------
-            def selecionar(e=None, nome=item):
+            def selecionar(e=None, nome=item, linha_ref=linha):
+                # se clicar no mesmo item → desseleciona
+                if self.item_selecionado == nome:
+                    linha_ref.configure(bg="white")
+                    for w in linha_ref.winfo_children():
+                        if w != chk:
+                            w.configure(bg="white")
+                    self.item_selecionado = None
+                    return
+            
+                # limpa seleção anterior
                 if self.item_selecionado and self.item_selecionado in self.linhas_check:
                     old = self.linhas_check[self.item_selecionado]
                     old.configure(bg="white")
                     for w in old.winfo_children():
                         w.configure(bg="white")
-    
+            
+                # seleciona atual
                 self.item_selecionado = nome
-    
-                linha.configure(bg="#dbe9f6")
-                for w in linha.winfo_children():
-                    if w != chk:  # não força bg do checkbox
+                linha_ref.configure(bg="#dbe9f6")
+                for w in linha_ref.winfo_children():
+                    if w != chk:
                         w.configure(bg="#dbe9f6")
     
             for widget in (linha, lbl_texto, lbl_data, lbl_icon):
