@@ -238,15 +238,39 @@ class GestorApp:
         self.item_selecionado = None
         self.linhas_check = {}
     
+        hoje = date.today()
+    
         for item, dados in self.dados[self.cliente_atual].items():
-            linha = ttk.Frame(self.frame_checks)
+            linha = tk.Frame(self.frame_checks, bg="white")
             linha.pack(fill=tk.X, pady=2)
             self.linhas_check[item] = linha
     
             var = tk.BooleanVar(value=dados["feito"])
             self.check_vars[item] = var
     
-            # Checkbox estilizado
+            # -------- ÍCONE DE STATUS --------
+            icone = "⬜"
+            cor_icone = "gray"
+    
+            if dados["data"]:
+                d = data_str_para_date(dados["data"])
+                if d < hoje:
+                    icone, cor_icone = "🔴", "red"
+                elif d == hoje:
+                    icone, cor_icone = "🟡", "#c9a300"
+                else:
+                    icone, cor_icone = "🟢", "green"
+    
+            lbl_icon = tk.Label(
+                linha,
+                text=icone,
+                fg=cor_icone,
+                bg="white",
+                width=2
+            )
+            lbl_icon.pack(side=tk.LEFT, padx=(2, 4))
+    
+            # -------- CHECKBOX --------
             chk = tk.Checkbutton(
                 linha,
                 variable=var,
@@ -255,24 +279,44 @@ class GestorApp:
                 selectcolor="#0b3c6f",
                 relief="flat"
             )
-            chk.pack(side=tk.LEFT, padx=4)
+            chk.pack(side=tk.LEFT)
     
-            lbl = ttk.Label(linha, text=item, width=50, anchor="w")
-            lbl.pack(side=tk.LEFT)
+            # -------- TEXTO --------
+            lbl_texto = tk.Label(
+                linha,
+                text=item,
+                bg="white",
+                anchor="w",
+                width=45
+            )
+            lbl_texto.pack(side=tk.LEFT)
     
-            ttk.Label(linha, text=dados["data"] or "—", width=10).pack(side=tk.LEFT)
+            lbl_data = tk.Label(
+                linha,
+                text=dados["data"] or "—",
+                bg="white",
+                width=10
+            )
+            lbl_data.pack(side=tk.LEFT)
     
-            # seleção da linha (realce azul em tudo)
+            # -------- SELEÇÃO DA LINHA --------
             def selecionar(e=None, nome=item):
                 if self.item_selecionado and self.item_selecionado in self.linhas_check:
-                    self.linhas_check[self.item_selecionado].configure(style="TFrame")
+                    old = self.linhas_check[self.item_selecionado]
+                    for w in old.winfo_children():
+                        w.configure(bg="white")
+                    old.configure(bg="white")
     
                 self.item_selecionado = nome
-                linha.configure(style="Selected.TFrame")
+    
+                linha.configure(bg="#dbe9f6")
+                for w in linha.winfo_children():
+                    w.configure(bg="#dbe9f6")
     
             linha.bind("<Button-1>", selecionar)
-            lbl.bind("<Button-1>", selecionar)
-            chk.bind("<Button-1>", selecionar)
+            lbl_texto.bind("<Button-1>", selecionar)
+            lbl_data.bind("<Button-1>", selecionar)
+            lbl_icon.bind("<Button-1>", selecionar)
     
     def adicionar_item(self):
         if not self.cliente_atual:
@@ -491,6 +535,11 @@ class GestorApp:
         entry_desc = ttk.Entry(frame)
         entry_desc.pack(fill=tk.X)
         entry_desc.insert(0, desc)
+
+        entry_desc.focus_set()
+        top.lift()
+        top.attributes("-topmost", True)
+        top.after(100, lambda: top.attributes("-topmost", False))
 
         ttk.Label(frame, text="Data (dd/mm/aa)").pack(anchor="w", pady=(6, 0))
         entry_data = ttk.Entry(frame)
