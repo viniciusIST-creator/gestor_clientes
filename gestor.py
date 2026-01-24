@@ -276,18 +276,29 @@ class GestorApp:
             lbl_icon.pack(side=tk.LEFT, padx=(2, 4))
     
             # -------- CHECKBOX (controle manual de cor) --------
-            chk = tk.Checkbutton(
+            box = tk.Label(
                 linha,
-                variable=var,
+                width=2,
+                height=1,
                 bg="white",
-                activebackground="#dbe9f6",
-                selectcolor="white",   # nasce branco
-                relief="flat",
-                highlightthickness=1,
-                highlightbackground="#b0b0b0"
+                relief="solid",
+                bd=1
             )
-            chk.pack(side=tk.LEFT, padx=(0, 4))
-    
+            box.pack(side=tk.LEFT, padx=(0, 6))
+            
+            def atualizar_box():
+                if var.get():
+                    box.configure(bg="#0b3c6f")
+                else:
+                    box.configure(bg="white")
+            
+            def alternar(_=None):
+                var.set(not var.get())
+                atualizar_box()
+            
+            box.bind("<Button-1>", alternar)
+            atualizar_box()
+
             def atualizar_checkbox(*_):
                 if var.get():
                     chk.configure(selectcolor="#0b3c6f")
@@ -321,7 +332,7 @@ class GestorApp:
                 if self.item_selecionado == nome:
                     linha_ref.configure(bg="white")
                     for w in linha_ref.winfo_children():
-                        if w != chk:
+                        if w != box:
                             w.configure(bg="white")
                     self.item_selecionado = None
                     return
@@ -337,7 +348,7 @@ class GestorApp:
                 self.item_selecionado = nome
                 linha_ref.configure(bg="#dbe9f6")
                 for w in linha_ref.winfo_children():
-                    if w != chk:
+                    if w != box:
                         w.configure(bg="#dbe9f6")
     
             for widget in (linha, lbl_texto, lbl_data, lbl_icon):
