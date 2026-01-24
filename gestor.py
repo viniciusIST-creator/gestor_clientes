@@ -419,10 +419,20 @@ class GestorApp:
         # ---------- HEADER ----------
         header = ttk.Frame(self.frame_cal)
         header.pack(fill=tk.X, pady=4)
+        lbl_titulo = ttk.Label(
+            header,
+            text=f"{self.meses[self.mes_atual - 1]} {self.ano_atual}",
+            foreground="#0b3c6f",
+            font=("Segoe UI", 11, "bold")
+        )
+        lbl_titulo.pack(pady=(0, 4))
     
         def atualizar_calendario(_=None):
             self.mes_atual = self.meses.index(combo_mes.get()) + 1
             self.ano_atual = int(combo_ano.get())
+            lbl_titulo.config(
+                text=f"{self.meses[self.mes_atual - 1]} {self.ano_atual}"
+            )
             self.mostrar_calendario()
     
         combo_mes = ttk.Combobox(
