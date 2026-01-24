@@ -298,15 +298,6 @@ class GestorApp:
             
             box.bind("<Button-1>", alternar)
             atualizar_box()
-
-            def atualizar_checkbox(*_):
-                if var.get():
-                    chk.configure(selectcolor="#0b3c6f")
-                else:
-                    chk.configure(selectcolor="white")
-    
-            var.trace_add("write", atualizar_checkbox)
-            atualizar_checkbox()
     
             # -------- TEXTO --------
             lbl_texto = tk.Label(
