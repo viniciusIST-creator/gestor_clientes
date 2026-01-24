@@ -219,15 +219,37 @@ class GestorApp:
             self.atualizar_lista()
 
     def remover_cliente(self):
-        if self.cliente_atual and messagebox.askyesno("Confirmar", "Remover cliente?"):
-            del self.dados[self.cliente_atual]
-            self.cliente_atual = None
-            salvar(self.dados)
-            self.atualizar_lista()
-            self.limpar_checklist()
-            self.salvar_checklist()
-            self.mostrar_calendario()
-            self.atualizar_tarefas()
+        if not self.cliente_atual:
+            return
+    
+        msg = (
+            f"O cliente '{self.cliente_atual}' será removido.\n\n"
+            "⚠️ Todas as tarefas e datas associadas a este cliente\n"
+            "serão apagadas permanentemente.\n\n"
+            "Deseja continuar?"
+        )
+    
+        if not messagebox.askyesno("Atenção", msg):
+            return
+    
+        # remove cliente dos dados
+        self.dados.pop(self.cliente_atual, None)
+        self.cliente_atual = None
+    
+        salvar(self.dados)
+    
+        # limpa UI
+        self.lista.selection_clear(0, tk.END)
+        self.lbl_cliente.config(text="Checklist")
+    
+        for w in self.frame_checks.winfo_children():
+            w.destroy()
+    
+        self.tree.delete(*self.tree.get_children())
+    
+        # atualiza tudo
+        self.atualizar_lista()
+        self.mostrar_calendario()
 
     # =================== CHECKLIST ===================
     def selecionar_cliente(self, _):
@@ -290,18 +312,15 @@ class GestorApp:
             )
             box.pack(side=tk.LEFT, padx=(0, 6))
             
-            def atualizar_box():
-                if var.get():
-                    box.configure(bg="#0b3c6f")
-                else:
-                    box.configure(bg="white")
+            def atualizar_box(v=var, b=box):
+                b.configure(bg="#0b3c6f" if v.get() else "white")
             
-            def alternar(_=None):
-                var.set(not var.get())
-                atualizar_box()
+            def alternar(_=None, v=var, b=box):
+                v.set(not v.get())
+                atualizar_box(v, b)
             
             box.bind("<Button-1>", alternar)
-            atualizar_box()
+            atualizar_box(var, box)
     
             # -------- TEXTO --------
             lbl_texto = tk.Label(
