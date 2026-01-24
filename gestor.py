@@ -7,7 +7,6 @@ import calendar
 
 ARQUIVO = "dados.json"
 
-
 # =================== UTIL ===================
 def data_str_para_date(s):
     return datetime.strptime(s, "%d/%m/%y").date()
@@ -56,6 +55,11 @@ class GestorApp:
         self.mes_atual = date.today().month
         self.ano_atual = date.today().year
 
+        self.meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+              "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+
+        self.anos_disponiveis = list(range(2000, 2100))
+        
         self.configurar_estilo()
         self.build_ui()
         self.atualizar_lista()
@@ -405,74 +409,113 @@ class GestorApp:
                 self.tree.insert("", tk.END, values=(cliente, nome, dados["data"]), tags=(tag,))
 
     # =================== CALENDÁRIO INTERATIVO ===================
-    def mostrar_calendario(self, ano=None, mes=None):
+    def mostrar_calendario(self):
         for w in self.frame_cal.winfo_children():
             w.destroy()
     
         hoje = date.today()
-        ano = ano or hoje.year
-        mes = mes or hoje.month
-    
-        meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-                 "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+        cal = calendar.Calendar(calendar.SUNDAY)
     
         # ---------- HEADER ----------
         header = ttk.Frame(self.frame_cal)
         header.pack(fill=tk.X, pady=4)
     
-        ttk.Label(
+        def atualizar_calendario(_=None):
+            self.mes_atual = self.meses.index(combo_mes.get()) + 1
+            self.ano_atual = int(combo_ano.get())
+            self.mostrar_calendario()
+    
+        combo_mes = ttk.Combobox(
             header,
-            text=f"{meses[mes - 1]} {ano}",
-            style="Header.TLabel"
-        ).pack()
+            values=self.meses,
+            state="readonly",
+            width=12
+        )
+        combo_mes.set(self.meses[self.mes_atual - 1])
+        combo_mes.pack(side=tk.LEFT, padx=4)
+        combo_mes.bind("<<ComboboxSelected>>", atualizar_calendario)
     
-        # ---------- COLETAR DATAS COM TAREFAS ----------
-        datas = {}
+        combo_ano = ttk.Combobox(
+            header,
+            values=self.anos_disponiveis,
+            state="readonly",
+            width=6
+        )
+        combo_ano.set(self.ano_atual)
+        combo_ano.pack(side=tk.LEFT, padx=4)
+        combo_ano.bind("<<ComboboxSelected>>", atualizar_calendario)
     
+        # ---------- MAPA DE TAREFAS ----------
+        mapa = {}
         for cliente, itens in self.dados.items():
-            for nome, d in itens.items():
-                if d["feito"] or not d["data"]:
+            for nome, dados in itens.items():
+                if dados["feito"] or not dados["data"]:
                     continue
-    
-                dt = data_str_para_date(d["data"])
-                if dt.year == ano and dt.month == mes:
-                    datas.setdefault(dt.day, []).append(dt)
+                d = data_str_para_date(dados["data"])
+                mapa.setdefault(d, []).append((cliente, nome))
     
         # ---------- GRID FIXO ----------
-        cal = calendar.Calendar(calendar.SUNDAY)
         grid = ttk.Frame(self.frame_cal)
-        grid.pack()
+        grid.pack(pady=6)
     
         dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
         for i, d in enumerate(dias):
             ttk.Label(grid, text=d, width=4, anchor="center").grid(row=0, column=i)
     
-        for r, semana in enumerate(cal.monthdayscalendar(ano, mes), start=1):
-            for c, dia in enumerate(semana):
-                bg = "white"
-                fg = "black"
+        semanas = cal.monthdayscalendar(self.ano_atual, self.mes_atual)
+        while len(semanas) < 6:
+            semanas.append([0] * 7)
     
-                if dia:
-                    if dia in datas:
-                        d = date(ano, mes, dia)
-                        if d < hoje:
-                            bg = "#ffd6d6"   # atrasado
-                        elif d == hoje:
-                            bg = "#fff3cd"   # hoje
-                        else:
-                            bg = "#d4edda"   # futuro
+        for r, semana in enumerate(semanas, start=1):
+            for c, dia in enumerate(semana):
+                if dia == 0:
+                    lbl = tk.Label(grid, text="", width=4, height=2, bg="white")
+                    lbl.grid(row=r, column=c, padx=1, pady=1)
+                    continue
+    
+                data_ref = date(self.ano_atual, self.mes_atual, dia)
+                bg = "white"
+    
+                if data_ref in mapa:
+                    st = status_data(data_ref)
+                    bg = {
+                        "atrasada": "#ffd6d6",
+                        "hoje": "#fff3cd",
+                        "futura": "#d4edda"
+                    }[st]
     
                 lbl = tk.Label(
                     grid,
-                    text=str(dia) if dia else "",
+                    text=str(dia),
                     width=4,
                     height=2,
                     bg=bg,
-                    fg=fg,
                     relief="ridge",
                     bd=1
                 )
                 lbl.grid(row=r, column=c, padx=1, pady=1)
+    
+                def clique(_, d=data_ref):
+                    tarefas = mapa.get(d, [])
+                    if tarefas:
+                        texto = "\n".join([f"{c} – {t}" for c, t in tarefas])
+                        messagebox.showinfo(d.strftime("%d/%m/%y"), texto)
+                    elif self.cliente_atual:
+                        res = self.janela_tarefa(
+                            "Nova Tarefa",
+                            data=d.strftime("%d/%m/%y")
+                        )
+                        if res:
+                            self.dados[self.cliente_atual][res["texto"]] = {
+                                "feito": False,
+                                "data": res["data"]
+                            }
+                            salvar(self.dados)
+                            self.mostrar_checklist()
+                            self.atualizar_tarefas()
+                            self.mostrar_calendario()
+    
+                lbl.bind("<Button-1>", clique)
 
     # =================== JANELAS ===================
     def janela_texto(self, titulo, valor):
