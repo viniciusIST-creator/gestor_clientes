@@ -229,7 +229,8 @@ class GestorApp:
         self.lbl_cliente.config(text=f"Checklist – {self.cliente_atual}")
         self.mostrar_checklist()
         self.atualizar_tarefas()
-
+        self.mostrar_calendario()
+        
     def mostrar_checklist(self):
         for w in self.frame_checks.winfo_children():
             w.destroy()
@@ -270,16 +271,27 @@ class GestorApp:
             )
             lbl_icon.pack(side=tk.LEFT, padx=(2, 4))
     
-            # -------- CHECKBOX --------
+            # -------- CHECKBOX (controle manual de cor) --------
             chk = tk.Checkbutton(
                 linha,
                 variable=var,
                 bg="white",
                 activebackground="#dbe9f6",
-                selectcolor="#0b3c6f",
-                relief="flat"
+                selectcolor="white",   # nasce branco
+                relief="flat",
+                highlightthickness=1,
+                highlightbackground="#b0b0b0"
             )
-            chk.pack(side=tk.LEFT)
+            chk.pack(side=tk.LEFT, padx=(0, 4))
+    
+            def atualizar_checkbox(*_):
+                if var.get():
+                    chk.configure(selectcolor="#0b3c6f")
+                else:
+                    chk.configure(selectcolor="white")
+    
+            var.trace_add("write", atualizar_checkbox)
+            atualizar_checkbox()
     
             # -------- TEXTO --------
             lbl_texto = tk.Label(
@@ -299,24 +311,23 @@ class GestorApp:
             )
             lbl_data.pack(side=tk.LEFT)
     
-            # -------- SELEÇÃO DA LINHA --------
+            # -------- SELEÇÃO DA LINHA (realce total) --------
             def selecionar(e=None, nome=item):
                 if self.item_selecionado and self.item_selecionado in self.linhas_check:
                     old = self.linhas_check[self.item_selecionado]
+                    old.configure(bg="white")
                     for w in old.winfo_children():
                         w.configure(bg="white")
-                    old.configure(bg="white")
     
                 self.item_selecionado = nome
     
                 linha.configure(bg="#dbe9f6")
                 for w in linha.winfo_children():
-                    w.configure(bg="#dbe9f6")
+                    if w != chk:  # não força bg do checkbox
+                        w.configure(bg="#dbe9f6")
     
-            linha.bind("<Button-1>", selecionar)
-            lbl_texto.bind("<Button-1>", selecionar)
-            lbl_data.bind("<Button-1>", selecionar)
-            lbl_icon.bind("<Button-1>", selecionar)
+            for widget in (linha, lbl_texto, lbl_data, lbl_icon):
+                widget.bind("<Button-1>", selecionar)
     
     def adicionar_item(self):
         if not self.cliente_atual:
@@ -327,6 +338,7 @@ class GestorApp:
             salvar(self.dados)
             self.mostrar_checklist()
             self.atualizar_tarefas()
+            self.mostrar_calendario()
 
     def editar_item(self):
         if not self.item_selecionado:
@@ -340,6 +352,7 @@ class GestorApp:
             salvar(self.dados)
             self.mostrar_checklist()
             self.atualizar_tarefas()
+            self.mostrar_calendario()
 
     def apagar_item(self):
         if self.item_selecionado and messagebox.askyesno("Confirmar", "Apagar tarefa?"):
@@ -347,6 +360,7 @@ class GestorApp:
             salvar(self.dados)
             self.mostrar_checklist()
             self.atualizar_tarefas()
+            self.mostrar_calendario()
 
     def limpar_checklist(self):
         if self.cliente_atual and messagebox.askyesno("Confirmar", "Apagar todas as tarefas?"):
@@ -354,13 +368,15 @@ class GestorApp:
             salvar(self.dados)
             self.mostrar_checklist()
             self.atualizar_tarefas()
-
+            self.mostrar_calendario()
+            
     def salvar_checklist(self):
         for item, var in self.check_vars.items():
             self.dados[self.cliente_atual][item]["feito"] = var.get()
         salvar(self.dados)
         self.atualizar_tarefas()
-
+        self.mostrar_calendario()
+        
     # =================== TAREFAS ===================
     def aplicar_filtro(self, _):
         self.filtro_atual = self.combo_filtro.get()
@@ -389,109 +405,74 @@ class GestorApp:
                 self.tree.insert("", tk.END, values=(cliente, nome, dados["data"]), tags=(tag,))
 
     # =================== CALENDÁRIO INTERATIVO ===================
-    def mostrar_calendario(self):
+    def mostrar_calendario(self, ano=None, mes=None):
         for w in self.frame_cal.winfo_children():
             w.destroy()
     
-        # mapa de datas -> status
-        mapa = {}
-    
-        for cliente, itens in self.dados.items():
-            for nome, dados in itens.items():
-                if dados["feito"] or not dados["data"]:
-                    continue
-                d = data_str_para_date(dados["data"])
-                mapa.setdefault(d, []).append((cliente, nome))
-    
-        topo = ttk.Frame(self.frame_cal)
-        topo.pack()
-    
-        def anterior():
-            self.mes_atual -= 1
-            if self.mes_atual == 0:
-                self.mes_atual = 12
-                self.ano_atual -= 1
-            self.mostrar_calendario()
-    
-        def proximo():
-            self.mes_atual += 1
-            if self.mes_atual == 13:
-                self.mes_atual = 1
-                self.ano_atual += 1
-            self.mostrar_calendario()
-    
-        ttk.Button(topo, text="◀", width=3, command=anterior).pack(side=tk.LEFT)
+        hoje = date.today()
+        ano = ano or hoje.year
+        mes = mes or hoje.month
     
         meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
                  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
     
+        # ---------- HEADER ----------
+        header = ttk.Frame(self.frame_cal)
+        header.pack(fill=tk.X, pady=4)
+    
         ttk.Label(
-            topo,
-            text=f"{meses[self.mes_atual - 1]} {self.ano_atual}",
+            header,
+            text=f"{meses[mes - 1]} {ano}",
             style="Header.TLabel"
-        ).pack(side=tk.LEFT, padx=10)
+        ).pack()
     
-        ttk.Button(topo, text="▶", width=3, command=proximo).pack(side=tk.LEFT)
+        # ---------- COLETAR DATAS COM TAREFAS ----------
+        datas = {}
     
+        for cliente, itens in self.dados.items():
+            for nome, d in itens.items():
+                if d["feito"] or not d["data"]:
+                    continue
+    
+                dt = data_str_para_date(d["data"])
+                if dt.year == ano and dt.month == mes:
+                    datas.setdefault(dt.day, []).append(dt)
+    
+        # ---------- GRID FIXO ----------
+        cal = calendar.Calendar(calendar.SUNDAY)
         grid = ttk.Frame(self.frame_cal)
-        grid.pack(pady=6)
+        grid.pack()
     
         dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
         for i, d in enumerate(dias):
-            ttk.Label(grid, text=d, width=4).grid(row=0, column=i)
+            ttk.Label(grid, text=d, width=4, anchor="center").grid(row=0, column=i)
     
-        cal = calendar.Calendar(calendar.SUNDAY)
-        semanas = cal.monthdayscalendar(self.ano_atual, self.mes_atual)
-    
-        while len(semanas) < 6:
-            semanas.append([0]*7)
-    
-        for r, semana in enumerate(semanas, start=1):
+        for r, semana in enumerate(cal.monthdayscalendar(ano, mes), start=1):
             for c, dia in enumerate(semana):
-                if dia == 0:
-                    ttk.Label(grid, text="", width=4).grid(row=r, column=c)
-                    continue
-    
-                data_ref = date(self.ano_atual, self.mes_atual, dia)
                 bg = "white"
+                fg = "black"
     
-                if data_ref in mapa:
-                    st = status_data(data_ref)
-                    bg = {"atrasada": "#ffd6d6", "hoje": "#fff3cd", "futura": "#d4edda"}[st]
+                if dia:
+                    if dia in datas:
+                        d = date(ano, mes, dia)
+                        if d < hoje:
+                            bg = "#ffd6d6"   # atrasado
+                        elif d == hoje:
+                            bg = "#fff3cd"   # hoje
+                        else:
+                            bg = "#d4edda"   # futuro
     
                 lbl = tk.Label(
                     grid,
-                    text=str(dia),
+                    text=str(dia) if dia else "",
                     width=4,
+                    height=2,
                     bg=bg,
-                    relief="ridge"
+                    fg=fg,
+                    relief="ridge",
+                    bd=1
                 )
                 lbl.grid(row=r, column=c, padx=1, pady=1)
-    
-                def clique(_, d=data_ref):
-                    tarefas = mapa.get(d, [])
-                    if tarefas:
-                        txt = "\n".join([f"{c} – {t}" for c, t in tarefas])
-                        messagebox.showinfo(
-                            d.strftime("%d/%m/%y"),
-                            txt
-                        )
-                    elif self.cliente_atual:
-                        res = self.janela_tarefa(
-                            "Nova Tarefa",
-                            data=d.strftime("%d/%m/%y")
-                        )
-                        if res:
-                            self.dados[self.cliente_atual][res["texto"]] = {
-                                "feito": False,
-                                "data": res["data"]
-                            }
-                            salvar(self.dados)
-                            self.mostrar_checklist()
-                            self.atualizar_tarefas()
-                            self.mostrar_calendario()
-    
-                lbl.bind("<Button-1>", clique)
 
     # =================== JANELAS ===================
     def janela_texto(self, titulo, valor):
