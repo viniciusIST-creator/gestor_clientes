@@ -104,14 +104,23 @@ class GestorApp:
         
     # =================== UI ===================
     def build_ui(self):
-        self.left = ttk.Frame(self.root, padding=10)
-        self.left.pack(side=tk.LEFT, fill=tk.Y)
+        borda_left = tk.Frame(self.root, bg="#0b3c6f", padx=1, pady=1)
+        borda_left.pack(side=tk.LEFT, fill=tk.Y, padx=6, pady=6)
+        
+        self.left = ttk.Frame(borda_left, padding=10)
+        self.left.pack(fill=tk.BOTH, expand=True)
 
-        self.middle = ttk.Frame(self.root, padding=10)
-        self.middle.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        borda_middle = tk.Frame(self.root, bg="#0b3c6f", padx=1, pady=1)
+        borda_middle.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=6, pady=6)
+        
+        self.middle = ttk.Frame(borda_middle, padding=10)
+        self.middle.pack(fill=tk.BOTH, expand=True)
 
-        self.right = ttk.Frame(self.root, padding=10)
-        self.right.pack(side=tk.RIGHT, fill=tk.BOTH)
+        borda_right = tk.Frame(self.root, bg="#0b3c6f", padx=1, pady=1)
+        borda_right.pack(side=tk.RIGHT, fill=tk.BOTH, padx=6, pady=6)
+        
+        self.right = ttk.Frame(borda_right, padding=10)
+        self.right.pack(fill=tk.BOTH, expand=True)
 
         # ---------- CLIENTES ----------
         ttk.Label(self.left, text="Clientes", style="Header.TLabel").pack(anchor="w")
