@@ -43,6 +43,7 @@ class GestorApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Gestão de engenharia - feito por Vinicius Coelho")
+        self.root.protocol("WM_DELETE_WINDOW", self.ao_fechar)
         self.root.geometry("1400x650")
         self.root.configure(bg="white")
 
@@ -250,7 +251,26 @@ class GestorApp:
         # atualiza tudo
         self.atualizar_lista()
         self.mostrar_calendario()
-
+        
+    def ao_fechar(self):
+        resposta = messagebox.askyesnocancel(
+            "Salvar alterações",
+            "Deseja salvar todas as tarefas antes de sair?"
+        )
+    
+        if resposta is True:
+            # salva estado atual dos checkboxes
+            if self.cliente_atual:
+                for item, var in self.check_vars.items():
+                    self.dados[self.cliente_atual][item]["feito"] = var.get()
+            salvar(self.dados)
+            self.root.destroy()
+    
+        elif resposta is False:
+            # fecha sem salvar
+            self.root.destroy()
+    
+        # resposta None = Cancelar → não faz nada
     # =================== CHECKLIST ===================
     def selecionar_cliente(self, _):
         if not self.lista.curselection():
