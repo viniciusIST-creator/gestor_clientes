@@ -94,6 +94,14 @@ class GestorApp:
         style.configure("TButton", padding=6)
         style.map("TButton", background=[("active", "#e6f0fa")])
 
+        style.configure(
+            "HeaderActive.TLabel",
+            font=("Segoe UI", 12, "bold"),
+            foreground="white",
+            background="#0b3c6f",
+            padding=6
+        )
+        
     # =================== UI ===================
     def build_ui(self):
         self.left = ttk.Frame(self.root, padding=10)
@@ -142,14 +150,14 @@ class GestorApp:
         self.frame_checks = ttk.Frame(self.middle)
         self.frame_checks.pack(fill=tk.BOTH, expand=True)
 
-        botoes = ttk.Frame(self.middle)
-        botoes.pack(fill=tk.X, pady=6)
+        self.frame_botoes = ttk.Frame(self.middle)
+        # NÃO dá pack aqui
 
-        ttk.Button(botoes, text="Adicionar Item", command=self.adicionar_item).pack(side=tk.LEFT)
-        ttk.Button(botoes, text="Editar Tarefa", command=self.editar_item).pack(side=tk.LEFT, padx=4)
-        ttk.Button(botoes, text="Apagar Item", command=self.apagar_item).pack(side=tk.LEFT, padx=4)
-        ttk.Button(botoes, text="Limpar Checklist", command=self.limpar_checklist).pack(side=tk.LEFT, padx=4)
-        ttk.Button(botoes, text="Salvar", command=self.salvar_checklist).pack(side=tk.RIGHT)
+        ttk.Button(self.frame_botoes, text="Adicionar Item", command=self.adicionar_item).pack(side=tk.LEFT)
+        ttk.Button(self.frame_botoes, text="Editar Tarefa", command=self.editar_item).pack(side=tk.LEFT, padx=4)
+        ttk.Button(self.frame_botoes, text="Apagar Item", command=self.apagar_item).pack(side=tk.LEFT, padx=4)
+        ttk.Button(self.frame_botoes, text="Limpar Checklist", command=self.limpar_checklist).pack(side=tk.LEFT, padx=4)
+        ttk.Button(self.frame_botoes, text="Salvar", command=self.salvar_checklist).pack(side=tk.RIGHT)
 
         # ---------- TAREFAS POR DATA ----------
         ttk.Label(self.right, text="Tarefas por Data", style="Header.TLabel").pack(anchor="w")
@@ -189,6 +197,7 @@ class GestorApp:
 
         self.frame_cal = ttk.Frame(self.right)
         self.frame_cal.pack(fill=tk.X, pady=6)
+        self.frame_cal.columnconfigure(0, weight=1)
         self.mostrar_calendario()
 
     # =================== CLIENTES ===================
@@ -241,7 +250,10 @@ class GestorApp:
     
         # limpa UI
         self.lista.selection_clear(0, tk.END)
-        self.lbl_cliente.config(text="Checklist")
+        self.lbl_cliente.config(
+            text="Checklist",
+            style="Header.TLabel"
+        )
     
         for w in self.frame_checks.winfo_children():
             w.destroy()
@@ -251,6 +263,7 @@ class GestorApp:
         # atualiza tudo
         self.atualizar_lista()
         self.mostrar_calendario()
+        self.frame_botoes.pack_forget()
         
     def ao_fechar(self):
         resposta = messagebox.askyesnocancel(
@@ -276,10 +289,14 @@ class GestorApp:
         if not self.lista.curselection():
             return
         self.cliente_atual = self.lista.get(self.lista.curselection())
-        self.lbl_cliente.config(text=f"Checklist – {self.cliente_atual}")
+        self.lbl_cliente.config(
+            text=f"Checklist – {self.cliente_atual}",
+            style="HeaderActive.TLabel"
+        )
         self.mostrar_checklist()
         self.atualizar_tarefas()
         self.mostrar_calendario()
+        self.frame_botoes.pack(fill=tk.X, pady=6)
         
     def mostrar_checklist(self):
         for w in self.frame_checks.winfo_children():
@@ -472,8 +489,13 @@ class GestorApp:
         cal = calendar.Calendar(calendar.SUNDAY)
     
         # ---------- HEADER ----------
-        header = ttk.Frame(self.frame_cal)
-        header.pack(fill=tk.X, pady=4)
+        header_container = ttk.Frame(self.frame_cal)
+        header_container.pack(fill=tk.X)
+        
+        header = ttk.Frame(header_container)
+        header.pack(anchor="center", pady=4)
+
+        
         lbl_titulo = ttk.Label(
             header,
             text=f"{self.meses[self.mes_atual - 1]} {self.ano_atual}",
